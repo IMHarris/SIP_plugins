@@ -1,0 +1,87 @@
+$def with (records)
+
+$var title: $_(u'SIP Flow Log')
+$var page: flowlog
+$code:
+	snames = gv.snames
+	log_option = ""
+	if gv.sd['lg'] == 1:
+		log_state = _(u"Enabled")
+		
+	else:
+		log_state = _(u"Disabled")
+		
+	def formatTime(t):
+		if gv.sd['tf']:
+			return t
+		else:
+			hour = int(t[0:2])
+			newhour = hour
+			if hour == 0:
+				newhour = 12
+			if hour > 12:
+				newhour = hour-12
+			return str(newhour) + t[2:] + (" am" if hour<12 else " pm")
+
+
+<script>
+    // Initialize behaviors
+    jQuery(document).ready(function(){
+        jQuery("button#nRefresh").click(function(){
+            window.location = "/flow-log";
+        });
+        jQuery("button#nDeleteAll").click(function(){
+            jQuery("form#df").submit();
+        });
+        jQuery("button#settingsButton").click(function(){
+            window.open("flow-sp", "_blank");
+        });
+        
+    });
+
+</script>
+
+<div id="options">
+    <div class="title">$_(u'Flow Log ')$log_state
+    <button class="execute" id="settingsButton" type="button" >$_(u'Flow Settings')</button></div>
+    <form method="get" action="/cfl" name="df" id="df"></form>
+</div>
+
+<div id="log">
+    <p>$_(u'Total number of records: ')${len(records)} (${_(u"no") if gv.sd['lr'] == 0 else gv.sd['lr']}$_(u' limit'))</p>
+    <p>$_(u'Download log as ')<a href="/wfl">csv</a>.</p>
+
+    <table class="logList">
+    	<thead>
+        <tr class="log_rec">
+            <th>$_(u'Date')</th>
+            <th>$_(u'Start Time')</th>
+            <th>$_(u'Duration')</th>
+            <th>$_(u'Stations')</th>
+            <th>$_(u'Usage')</th>
+            <th>$_(u'Units')</th>
+        </tr>
+        </thead>
+         
+        <tbody> 
+        $ odd = 1
+        $for r in records:
+            $ event = r #  ast.literal_eval(json.loads(r))
+            <tr class="log_rec ${'odd' if odd else 'even'}">
+                <td>${event["date"]}</td>
+                <td>${formatTime(event["start"])}</td>
+                <td>${event["duration"]}</td>
+                <td>${event["stations"]}</td>
+                <td>${str(event["usage"])}</td>
+                <td>${event["measure"]}</td>
+            </tr>
+            $ odd = 1 - odd
+        </tbody>  
+    </table>
+
+</div>
+
+<div class="controls">
+    <button id="nRefresh" class="refresh">$_(u'Refresh')</button>
+    <button id="nDeleteAll" class="delete danger">$_(u'Clear Log')</button>
+</div>
