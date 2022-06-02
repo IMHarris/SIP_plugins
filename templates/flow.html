@@ -7,12 +7,10 @@ $var page: flowlog
 $code:
 	snames = gv.snames
 	log_option = ""
-	if gv.sd['lg'] == 1:
+	if u"chk-enable-logging" in settings.keys():
 		log_state = _(u"enabled")
-
 	else:
 		log_state = _(u"disabled")
-
 	def formatTime(t):
 		if gv.sd['tf']:
 			return t
@@ -24,8 +22,15 @@ $code:
 			if hour > 12:
 				newhour = hour-12
 			return str(newhour) + t[2:] + (" am" if hour<12 else " pm")
+	if u"text-max-log-entries" in settings.keys():
+	    textmax = settings["text-max-log-entries"]
+	    if textmax.isnumeric():
+	        max_log_entries = int(settings["text-max-log-entries"])
+	    else:
+	        max_log_entries = 0
+	else:
+	    max_log_entries = 0
     
-</script>
 
 <script>
     // Initialize behaviors
@@ -43,6 +48,11 @@ $code:
 
 </script>
 
+<script>
+
+    document.getElementByName("text-master-sensor-addr").innerHTML = "Hi";
+    
+</script>
 <noscript>Sorry, your browser does not support JavaScript!</noscript>
 
 
@@ -65,9 +75,13 @@ $code:
                 <td id="lbl-cal-btn" rowspan="2"> <button type="button" id="btn-calibrate" background-color= #AAA hidden>Start Calibration</button></td>
             </tr>
             <tr>
-                <td id="lbl-valves" style="font-size:1.25em;text-align:left">Raised bed valve open</td>
+                <td id="lbl-use" style="font-size:1.25em;text-align:left"></td>
+            </tr>
+            <tr>
+                <td id="lbl-valves" style="font-size:1.25em;text-align:left"></td>
             </tr>
         </table><br>
+        
     </form>
 
 </div>
@@ -76,7 +90,7 @@ $code:
     <header>
         <h3>${u'Flow log (' + log_state + u')'}</h3>
     </header>
-    <p>$_(u'Total number of records: ')${len(records)} (${_(u"no") if gv.sd['lr'] == 0 else gv.sd['lr']}$_(u' limit'))</p>
+    <p>$_(u'Total number of records: ')${len(records)} (${_(u"no") if max_log_entries == 0 else str(max_log_entries)}$_(u' limit'))</p>
     <p>$_(u'Download log as ')<a href="/wfl">csv</a>.</p>
 
     <table class="logList">
@@ -109,17 +123,14 @@ $code:
 
 </div>
 
-<div class="controls">
-    <button id="cSubmit" class="submit"><b>$_(u'Submit')</b></button>
-    <button id="cCancel" class="cancel danger">$_(u'Cancel')</button>
-</div>
-</div>
+<br>
 
 <script>   
     //This code polls the server for flow rate    
     
     // User configuration variables
-    const apiURL = "http://192.168.1.14/flow-data"  //page name delivering flow info in JSON
+    var href = window.location.href
+    var apiURL = href.substr(0, href.lastIndexOf("/") + 1) + "flow-data" //page name delivering flow info in JSON
     const updateInterval = 3000  //flow info update frequency in milliseconds
     
     //Create a request variable and assign a new XMLHttpRequest object to it.
@@ -131,9 +142,9 @@ $code:
         if (arg == "pulserate") {
             document.getElementById("lbl-flow").textContent = String(flowData.pulse_rate) + " pulses/second";
         } else if (arg == "flowrate") {
-            //var flow_rate = round(flowData.pulse_rate/Number(settings['text-pulses-per-measure'])*100)/100;
-            //var measure = settings['text-volume-measure']
             document.getElementById("lbl-flow").textContent = String(flowData.flow_rate) + " " + flowData.volume_measure;
+            document.getElementById("lbl-use").textContent = String(flowData.water_use);
+            document.getElementById("lbl-valves").textContent = String(flowData.valve_status);
         }
     };
     

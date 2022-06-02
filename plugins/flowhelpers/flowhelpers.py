@@ -15,13 +15,14 @@ import ast
 Flow Plugin Helper functions
 **********************************************
 """
-class localSettings:
+
+
+class LocalSettings:
     
     def __init__(self):
         self.pulses_per_measure = 0
-        localSettings.load_settings(self)    
+        LocalSettings.load_settings(self)
 
-        
     def load_settings(self):
         self.pulses_per_measure = 0
         self.enable_logging = False
@@ -35,38 +36,71 @@ class localSettings:
                 self.pulses_per_measure = float(saved_settings["text-pulses-per-measure"])
             if u"enable-logging" in saved_settings.keys():
                 self.enable_logging = True
+            if u"text-volume-measure" in saved_settings.keys():
+                self.volume_measure = saved_settings["text-volume-measure"]
+            if u"chk-enable-logging" in saved_settings.keys():
+                self.enable_logging = True
             if u"text-max-log-entries" in saved_settings.keys():
-                self.max_log_entries = int(saved_settings["text-max-log-entries"])
+                textmax = saved_settings["text-max-log-entries"]
+                if textmax.isnumeric():
+                    self.max_log_entries = int(textmax)
+                else:
+                    self.max_log_entries = 0
+            else:
+                self.max_log_entries = 0
             if u"text-volume-measure" in saved_settings.keys():
                 self.volume_measure = saved_settings["text-volume-measure"]
         
 
-class flowWindow:
+class FlowWindow:
     def __init__(self,local_settings):
         self.ls = local_settings
-        flowWindow.clear(self)
- 
-       
+        FlowWindow.clear(self)
+
     def clear(self):
         self.start_time = 0
         self.end_time = 0
         self.start_pulses = 0
         self.end_pulses = 0
-        self.valves = []
-        self.valves_str = []
-        
-    
+        self.open_valves = []
+        self.open_valves_names = []
+
     def usage(self):
+        # Returns water usage in current flow window
         if self.ls.pulses_per_measure > 0:
             return round(((self.end_pulses-self.start_pulses)/self.ls.pulses_per_measure)*10)/10
         else:
             return 0
         
-    
+    def valves_status_str(self):
+        # Returns string noting which valves are open
+        if len(self.open_valves_names) == 0:
+            status_str = "All valves closed"
+        elif len(self.open_valves_names) == 1:
+            status_str = self.open_valves_names[0] + " is open"
+        else:
+            status_str = self.open_valves_names[0]
+            i = 1
+            while i < len(self.open_valves_names):
+                status_str = status_str + ", " + self.open_valves_names[i]
+                i = i+1
+        status = status_str + " are open"
+        return status_str
+                
+    # def valves_str(self):
+    #     # Returns list of open valves by name
+    #     valve_list = []
+    #     if len(self.open_valves_names) >= 1:
+    #         valve_list.append(self.open_valves_names[0])
+    #         if len(self.open_valves_names) > 1:
+    #             i = 1
+    #             while i < len(self.open_valves_names):
+    #                 valve_list.append(self.open_valves_names[i])
+    #                 i = i + 1
+
     def duration(self):
         delta = self.end_time - self.start_time
         return int(delta.total_seconds())
-
 
     def write_log(self):
         """
@@ -75,21 +109,15 @@ class flowWindow:
         """
         print("writing flow log ", str(self.ls.enable_logging) )
         if self.ls.enable_logging:
-            #station = "stations"
-            #duration = "duration"
-            #strt = "start"
-            date = "date"
-            #usage = "usage"
-            #measure = "measure"
             open_valves = ""
             open_valves_str = ""
             i = 0
-            for valve in self.valves:
+            for valve in self.open_valves:
                 # Create the string of valve numbers separated by commas
                 open_valves = open_valves + str(valve)
                 open_valves_str = open_valves_str + gv.snames[valve]
                 i=i+1
-                if i<len(self.valves):
+                if i<len(self.open_valves):
                     open_valves = open_valves + ","
                     open_valves_str = open_valves_str + ","
             
@@ -105,7 +133,7 @@ class flowWindow:
                 + u'","'
                 + "usage"
                 + u'":'
-                + str(flowWindow.usage(self))
+                + str(FlowWindow.usage(self))
                 + u',"'
                 + u'measure'
                 + u'":"'
@@ -113,7 +141,7 @@ class flowWindow:
                 + u'","'
                 + u'duration'
                 + u'":"'
-                + timestr(flowWindow.duration(self))
+                + timestr(FlowWindow.duration(self))
                 + u'","'
                 + u'date'
                 + u'":"'
@@ -149,7 +177,8 @@ def timestr(t):
         + str((t % 60 >> 0) // 10 >> 0)
         + str((t % 60 >> 0) % 10)
     )  
-    
+
+
 def read_log():
     """
     Read data from irrigation log file.

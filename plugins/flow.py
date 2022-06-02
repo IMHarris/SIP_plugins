@@ -25,7 +25,7 @@ from webpages import ProtectedPage, WebPage  # Needed for security
 
 
 # Global variables
-sensor_register = 0x00 # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
+sensor_register = 0x01 # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
 settings_b4 = {}
 saved_settings = {}
 valve_states = []
@@ -154,13 +154,15 @@ def determine_changed_valves():
         fw.end_pulses = capture_flow_counter
         fw.end_time = capture_time
         fw.write_log()
+        fw.start_pulses = capture_flow_counter
         
     elif (not valve_open and valve_now_open):
         #Flow has started.  Start a new flow window
         fw.start_time = capture_time
         fw.start_pulses = capture_flow_counter
-        fw.valves = open_valves
-        fw.valves_str = l_open_valves_str
+        fw.open_valves = open_valves
+        TODO clean this next line up
+        fw.open_valves_names = l_open_valves_str
         
     elif (valve_open and valve_now_open):
         # Flow is still running but through different valve(s)
@@ -171,11 +173,11 @@ def determine_changed_valves():
         # Start the next flow window
         fw.start_time = capture_time
         fw.start_pulses = capture_flow_counter
-        fw.valves = open_valves
-        fw.valves_str = l_open_valves_str
+        fw.open_valves = open_valves
+        fw.open_valves_names = l_open_valves_str
     
     valve_open=valve_now_open
-    open_valves_str = l_open_valves_str
+    #open_valves_str = l_open_valves_str
     print("valves changed: ", changed_valves)
     return changed_valves
 
@@ -266,6 +268,7 @@ class save_settings(ProtectedPage):
         with open(u"./data/flow.json", u"w") as f:  # Edit: change name of json file
             json.dump(qdict, f)  # save to file
         update_settings()
+        ls.load_settings()
         print(u"Flow settings after update")
         print_settings()
         # actions_on_change_settings()
@@ -293,7 +296,7 @@ class flowdata(ProtectedPage):
                     flow_rate = round(pulse_rate * 3600 / pulses_per_measure,3)
                 else:
                     flow_rate = -1
-                qdict.update({u"flow_rate": flow_rate})
+                qdict.update({u"flow_rate": round(flow_rate,1)})
             else:
                 qdict.update({u"flow_rate": 0})          
         else:
@@ -304,7 +307,14 @@ class flowdata(ProtectedPage):
         else:
             qdict.update({u"volume_measure": "?/hr"})
         
-        print("received flow request")
+        # Water usage since beginning of window
+        water_use = round((all_pulses - fw.start_pulses) / ls.pulses_per_measure, 1)
+        water_use_str = str(water_use) + " " + ls.volume_measure
+        qdict.update({u"water_use": water_use_str})
+        
+        # Create valve status tring
+        qdict.update({u"valve_status": fw.valves_status_str()})
+        
         return json.dumps(qdict)
 
 class flow(ProtectedPage):
@@ -323,6 +333,7 @@ class flow(ProtectedPage):
                     u"./data/flow.json", u"r"
             ) as f:  # Read settings from json file if it exists
                 settings = json.load(f)
+                print(settings)
         except IOError:  # If file does not exist return empty value
             settings = {}
             # Default settings. can be list, dictionary, etc.
@@ -365,6 +376,7 @@ def main_loop():
         try:
             bytes = bus.read_i2c_block_data(client_addr, sensor_register, 4)
             pulse_rate = int.from_bytes(bytes,u"little")
+            # print(bytes, pulse_rate)
         except IOError:
             pulse_rate = -1
         

@@ -52,7 +52,7 @@ $code:
 </script>
 <script>   
 
-    document.getElementByName('text-master-sensor-addr').innerHTML = "";
+    document.getElementByName("text-master-sensor-addr").innerHTML = "";
     
 </script>
 <noscript>Sorry, your browser does not support JavaScript!</noscript>
@@ -60,8 +60,8 @@ $code:
 
 <div id="plugin">
     <div class="title">Flow settings<!--Edit: User page heading, Make relevant to your plugin-->
-    <button class="execute" id="docButton" type="button" >$_(u'Help')</button>
     <button class="execute" id="logButton" type="button" >$_(u'Flow Log')</button>
+    <button class="execute" id="docButton" type="button" >$_(u'Help')</button>
     </div>
 
     <p>$_(u' ')</p>
@@ -135,7 +135,7 @@ $code:
     //This code polls the server for flow rate    
     
     // User configuration variables
-    const apiURL = "http://192.168.1.14/flow-data"  //page name delivering flow info in JSON
+    var apiURL = href.substr(0, href.lastIndexOf("/") + 1) + "flow-data" //page name delivering flow info in JSON
     const updateInterval = 3000  //flow info update frequency in milliseconds
     
     //Create a request variable and assign a new XMLHttpRequest object to it.
