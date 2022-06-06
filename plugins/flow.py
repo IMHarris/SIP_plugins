@@ -25,19 +25,21 @@ from webpages import ProtectedPage, WebPage  # Needed for security
 
 
 # Global variables
-sensor_register = 0x01 # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
+sensor_register = 0x01  # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
 settings_b4 = {}
 saved_settings = {}
-valve_states = []
 changed_valves = {}
-all_pulses = 0 # Calculated pulses since beginning of time
+all_pulses = 0  # Calculated pulses since beginning of time
 master_sensor_addr = 0
-pulse_rate = 0 # holds last captured flow rate
-loop_running = False # Notes if the main loop has started
-valve_open = False # Shows as true if any valve is open
-master_station = 0 # Master station number 0 = no master
-ls = flowhelpers.localSettings()
-fw = flowhelpers.flowWindow(ls)
+pulse_rate = 0  # holds last captured flow rate
+loop_running = False  # Notes if the main loop has started
+valve_open = False  # Shows as true if any valve is open
+ls = flowhelpers.LocalSettings()
+fw = flowhelpers.FlowWindow(ls)
+# Number of readings to average for the flow rate reading display.
+# This is for display purposes only and does not change the usage
+# calculation in any way
+fs = flowhelpers.FlowSmoother(3)
 open_valves_str = []
 
 # Variables for the flow controller client
@@ -67,17 +69,15 @@ def save_prior_settings(prior_settings):
     settings_b4 = prior_settings
 
 
-def actions_on_change_settings():
-    """ 
-    Execute any actions required from plugin settings changes
-    """
-    pass
-    #if u"check-sms-enabled" in settings_b4.keys():
-    #    value = settings_b4[u"check-sms-enabled"]
-    #else:
-    #    value = u""
-
-
+# def actions_on_change_settings():
+#     """
+#     Execute any actions required from plugin settings changes
+#     """
+#     pass
+#     #if u"check-sms-enabled" in settings_b4.keys():
+#     #    value = settings_b4[u"check-sms-enabled"]
+#     #else:
+#     #    value = u""
 def update_settings():
     """
     Load settings from flow.json file to local variables
@@ -89,7 +89,7 @@ def update_settings():
         with open(u"./data/flow.json", u"r") as f:
             saved_settings = json.load(f)    
 
-    actions_on_change_settings() # Take action on any changes in settings
+    # actions_on_change_settings() # Take action on any changes in settings
 
 
 def print_settings(lpad=2):
@@ -104,20 +104,6 @@ def update_options():
     Read key main program options into local variables
     """
     print(gv.sd["mas"])
-      
-
-def initialize_valve_states():
-    """
-    Puts valve states into local variable valve_states[]
-    """
-    global valve_states
-    valve_states = []
-    i=0
-    while (i<len(gv.srvals)):
-        valve_states.append(gv.srvals[i])
-        i = i + 1     
-    master_station = gv.sd[u"mas"]
-
 
 def determine_changed_valves():
     """
@@ -126,59 +112,45 @@ def determine_changed_valves():
     """
     global changed_valves
     global valve_open
+    global fw
     capture_time=datetime.datetime.now()
     capture_flow_counter = all_pulses
-    open_valves = []
-    l_open_valves_str = []
-    valve_now_open = False
     i = 0
-    while (i<len(valve_states)):
-        if (i != gv.sd["mas"] - 1):
+    fw_new = flowhelpers.FlowWindow(ls)
+    fw_new.start_time = capture_time
+    fw_new.start_pulses = capture_flow_counter
+    vs = fw.valve_states()
+    print("hi valvestates1: ", str(vs[1]))
+    while i < len(vs):
+        if i != gv.sd["mas"] - 1:
             # Ignore changes in the master valve
-            if gv.srvals[i] == 1:
-                # Determine open valves
-                open_valves.append(i)
-                l_open_valves_str.append(gv.snames[i])
-                valve_now_open = True
-            
-            if valve_states[i] != gv.srvals[i]:
+            if vs[i] != gv.srvals[i]:
                 # Determine changed valves
                 if gv.srvals[i] == 1:
                     changed_valves[i] = u"on"
                 else:
                     changed_valves[i] = u"off"
         i = i + 1
-    print("valveopen:",str(valve_open), ", valvenowopen:",str(valve_now_open))
-    if (valve_open and not valve_now_open):
+    # print("valveopen:",str(valve_open), ", valvenowopen:",str(valve_now_open))
+    print("valveopen:", str(fw.valve_open()), ", valvenowopen:", str(fw_new.valve_open()))
+    if fw.valve_open() and not fw_new.valve_open():
         # All valves are now closed end current flow window
         fw.end_pulses = capture_flow_counter
         fw.end_time = capture_time
         fw.write_log()
-        fw.start_pulses = capture_flow_counter
-        
-    elif (not valve_open and valve_now_open):
+
+    elif  not fw.valve_open() and fw_new.valve_open():
         #Flow has started.  Start a new flow window
-        fw.start_time = capture_time
-        fw.start_pulses = capture_flow_counter
-        fw.open_valves = open_valves
-        TODO clean this next line up
-        fw.open_valves_names = l_open_valves_str
-        
-    elif (valve_open and valve_now_open):
+        pass
+
+    elif fw.valve_open() and fw_new.valve_open():
         # Flow is still running but through different valve(s)
         # End current flow window
         fw.end_pulses = capture_flow_counter
         fw.end_time = capture_time
         fw.write_log()
-        # Start the next flow window
-        fw.start_time = capture_time
-        fw.start_pulses = capture_flow_counter
-        fw.open_valves = open_valves
-        fw.open_valves_names = l_open_valves_str
-    
-    valve_open=valve_now_open
-    #open_valves_str = l_open_valves_str
     print("valves changed: ", changed_valves)
+    fw = fw_new
     return changed_valves
 
 
@@ -186,12 +158,12 @@ class clear_log(ProtectedPage):
     """
     Delete all log records
     """
-
     def GET(self):
         with io.open(u"./data/flowlog.json", u"w") as f:
             f.write(u"")
         raise web.seeother(u"/flow-log")
-        
+
+
 class download_csv(ProtectedPage):
     """
     Downloads log as csv
@@ -289,18 +261,31 @@ class flowdata(ProtectedPage):
         qdict = {u"pulse_rate":pulse_rate}
         qdict.update({u"total_pulses":all_pulses})
         
+        # if u"text-pulses-per-measure" in saved_settings.keys():
+        #     pulses_per_measure = float(saved_settings[u"text-pulses-per-measure"])
+        #     if pulses_per_measure > 0:
+        #         if pulse_rate >= 0:
+        #             flow_rate = round(pulse_rate * 3600 / pulses_per_measure,3)
+        #         else:
+        #             flow_rate = -1
+        #         qdict.update({u"flow_rate": round(flow_rate,1)})
+        #     else:
+        #         qdict.update({u"flow_rate": 0})
+        # else:
+        #     qdict.update({u"flow_rate": 0})
         if u"text-pulses-per-measure" in saved_settings.keys():
             pulses_per_measure = float(saved_settings[u"text-pulses-per-measure"])
             if pulses_per_measure > 0:
-                if pulse_rate >= 0:
-                    flow_rate = round(pulse_rate * 3600 / pulses_per_measure,3)
+                if fs.last_reading() >= 0:
+                    flow_rate = round(fs.ave_reading() * 3600 / pulses_per_measure,3)
                 else:
                     flow_rate = -1
                 qdict.update({u"flow_rate": round(flow_rate,1)})
             else:
-                qdict.update({u"flow_rate": 0})          
+                qdict.update({u"flow_rate": 0})
         else:
             qdict.update({u"flow_rate": 0})
+
             
         if u"text-volume-measure" in saved_settings.keys():
             qdict.update({u"volume_measure": saved_settings[u"text-volume-measure"] + "/hr"})
@@ -376,6 +361,7 @@ def main_loop():
         try:
             bytes = bus.read_i2c_block_data(client_addr, sensor_register, 4)
             pulse_rate = int.from_bytes(bytes,u"little")
+            fs.add_reading(pulse_rate)
             # print(bytes, pulse_rate)
         except IOError:
             pulse_rate = -1
@@ -398,14 +384,11 @@ def notify_zone_change(name, **kw):
     """
     This event tells us a valve was turned on or off
     """
-
     print("Valves changing - kazoo")
     changed_valves = determine_changed_valves()
     if len(changed_valves) > 0:
         for num, val in changed_valves.items():
             print(u"Valve {} switched {}".format(str(num), val))
-    initialize_valve_states()
-
 
 zones = signal(u"zone_change")
 zones.connect(notify_zone_change)
@@ -450,7 +433,6 @@ option_change.connect(notify_option_change)
 Run when plugin is loaded
 """
 update_settings()
-initialize_valve_states()
 print(u"Flow Settings")
 print_settings()
 ls.load_settings()

@@ -53,17 +53,54 @@ class LocalSettings:
         
 
 class FlowWindow:
+    # Flow window class holds data about the current open valves
     def __init__(self,local_settings):
         self.ls = local_settings
-        FlowWindow.clear(self)
-
-    def clear(self):
         self.start_time = 0
         self.end_time = 0
         self.start_pulses = 0
         self.end_pulses = 0
-        self.open_valves = []
-        self.open_valves_names = []
+        self._open_valves = []
+        self._open_valves_names = []
+        self._valve_states = []
+        self._valve_open = False
+        self.load_valve_states()
+
+    def load_valve_states(self):
+        i = 0
+        self._valve_open = False
+        while i < len(gv.srvals):
+            self._valve_states.append(gv.srvals[i])
+            if i != gv.sd["mas"] - 1:
+                # Ignore status of or changes in the master valve
+                if gv.srvals[i] == 1:
+                    # Determine open valves
+                    self._open_valves.append(i)
+                    self._open_valves_names.append(gv.snames[i])
+                    self._valve_open = True
+            i = i + 1
+        print("flow window valve states received", str(gv.srvals))
+        print("flow window valve is on ", str(self._valve_open))
+        #print("valveopen:", str(valve_open), ", valvenowopen:", str(valve_now_open))
+
+    def valve_states(self):
+        return self._valve_states
+
+    def open_valves(self):
+        return self._open_valves
+
+    def open_valves_names(self):
+        return self._open_valves_names
+
+    def valve_open(self):
+        # Returns True if a valve is open, else False
+        return self._valve_open
+
+    def add_open_valve(self,valve_number):
+        self._open_valves.append(valve_number)
+
+    def master_station(self):
+        return gv.sd[u"mas"]
 
     def usage(self):
         # Returns water usage in current flow window
@@ -74,15 +111,15 @@ class FlowWindow:
         
     def valves_status_str(self):
         # Returns string noting which valves are open
-        if len(self.open_valves_names) == 0:
+        if len(self._open_valves_names) == 0:
             status_str = "All valves closed"
-        elif len(self.open_valves_names) == 1:
-            status_str = self.open_valves_names[0] + " is open"
+        elif len(self._open_valves_names) == 1:
+            status_str = self._open_valves_names[0] + " is open"
         else:
-            status_str = self.open_valves_names[0]
+            status_str = self._open_valves_names[0]
             i = 1
-            while i < len(self.open_valves_names):
-                status_str = status_str + ", " + self.open_valves_names[i]
+            while i < len(self._open_valves_names):
+                status_str = status_str + ", " + self._open_valves_names[i]
                 i = i+1
         status = status_str + " are open"
         return status_str
@@ -107,17 +144,17 @@ class FlowWindow:
         Add flow window data to json log file - most recent first.
         If a record limit is specified (limit) the number of records is truncated.
         """
-        print("writing flow log ", str(self.ls.enable_logging) )
+        print("writing flow log ", str(self.ls.enable_logging))
         if self.ls.enable_logging:
             open_valves = ""
             open_valves_str = ""
             i = 0
-            for valve in self.open_valves:
+            for valve in self._open_valves:
                 # Create the string of valve numbers separated by commas
                 open_valves = open_valves + str(valve)
                 open_valves_str = open_valves_str + gv.snames[valve]
                 i=i+1
-                if i<len(self.open_valves):
+                if i<len(self._open_valves):
                     open_valves = open_valves + ","
                     open_valves_str = open_valves_str + ","
             
@@ -163,7 +200,30 @@ class FlowWindow:
                 else:
                     f.writelines(lines)
                     
-        self.clear()
+
+class FlowSmoother():
+    # Averages the flow readings for a smoother readout
+    def __init__(self,average_period):
+        self._average_period = average_period
+        self._readings = [0] * average_period
+        self._last_reading = float(0)
+        self._i = 0
+
+    def add_reading(self,reading):
+        self._last_reading = reading
+        self._readings[self._i % self._average_period] = reading
+        self._i = self._i + 1
+
+    def last_reading(self):
+        return self._last_reading
+
+    def ave_reading(self):
+        reading_sum = 0
+        i = 0
+        while i < self._average_period:
+            reading_sum = reading_sum + self._readings[i]
+            i = i + 1
+        return reading_sum/self._average_period
 
 
 def timestr(t):
