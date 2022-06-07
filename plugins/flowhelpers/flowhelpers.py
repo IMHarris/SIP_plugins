@@ -5,10 +5,8 @@ import gv
 from os.path import exists
 import json
 import codecs
-import time
 import io
 import ast
-#import datetime
 
 """
 **********************************************
@@ -113,27 +111,13 @@ class FlowWindow:
         # Returns string noting which valves are open
         if len(self._open_valves_names) == 0:
             status_str = "All valves closed"
-        elif len(self._open_valves_names) == 1:
-            status_str = self._open_valves_names[0] + " is open"
         else:
             status_str = self._open_valves_names[0]
             i = 1
             while i < len(self._open_valves_names):
                 status_str = status_str + ", " + self._open_valves_names[i]
-                i = i+1
-        status = status_str + " are open"
+                i = i + 1
         return status_str
-                
-    # def valves_str(self):
-    #     # Returns list of open valves by name
-    #     valve_list = []
-    #     if len(self.open_valves_names) >= 1:
-    #         valve_list.append(self.open_valves_names[0])
-    #         if len(self.open_valves_names) > 1:
-    #             i = 1
-    #             while i < len(self.open_valves_names):
-    #                 valve_list.append(self.open_valves_names[i])
-    #                 i = i + 1
 
     def duration(self):
         delta = self.end_time - self.start_time

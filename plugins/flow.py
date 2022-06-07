@@ -13,7 +13,6 @@ import gv  # Get access to SIP's settings
 import io
 import json  # for working with data file
 from os.path import exists
-import random
 from sip import template_render  #  Needed for working with web.py templates
 from smbus import SMBus
 import threading
@@ -22,7 +21,6 @@ from urls import urls  # Get access to SIP's URLs
 import web  # web.py framework
 from webpages import ProtectedPage, WebPage  # Needed for security
 #from .flowhelpers import flowhelpers
-
 
 # Global variables
 sensor_register = 0x01  # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
@@ -131,8 +129,7 @@ def determine_changed_valves():
                 else:
                     changed_valves[i] = u"off"
         i = i + 1
-    # print("valveopen:",str(valve_open), ", valvenowopen:",str(valve_now_open))
-    print("valveopen:", str(fw.valve_open()), ", valvenowopen:", str(fw_new.valve_open()))
+
     if fw.valve_open() and not fw_new.valve_open():
         # All valves are now closed end current flow window
         fw.end_pulses = capture_flow_counter
@@ -205,7 +202,7 @@ class settings(ProtectedPage):
         try:
             runtime_values = {"sensor-addr":u"0x%02X" % client_addr}
             if pulse_rate >=0:
-                runtime_values.update({"sensor-connected":"no"})
+                runtime_values.update({"sensor-connected":"yes"})
             else:
                 runtime_values.update({"sensor-connected":"no"})
             
@@ -234,9 +231,7 @@ class save_settings(ProtectedPage):
         qdict = (
             web.input()
         )  # Dictionary of values returned as query string from settings page.
-        
-        # print(u"SMS settings before update")
-        # print_settings()
+
         with open(u"./data/flow.json", u"w") as f:  # Edit: change name of json file
             json.dump(qdict, f)  # save to file
         update_settings()
@@ -260,31 +255,24 @@ class flowdata(ProtectedPage):
         web.header(b"Cache-Control", b"no-cache")
         qdict = {u"pulse_rate":pulse_rate}
         qdict.update({u"total_pulses":all_pulses})
-        
-        # if u"text-pulses-per-measure" in saved_settings.keys():
-        #     pulses_per_measure = float(saved_settings[u"text-pulses-per-measure"])
-        #     if pulses_per_measure > 0:
-        #         if pulse_rate >= 0:
-        #             flow_rate = round(pulse_rate * 3600 / pulses_per_measure,3)
-        #         else:
-        #             flow_rate = -1
-        #         qdict.update({u"flow_rate": round(flow_rate,1)})
-        #     else:
-        #         qdict.update({u"flow_rate": 0})
-        # else:
-        #     qdict.update({u"flow_rate": 0})
+
         if u"text-pulses-per-measure" in saved_settings.keys():
             pulses_per_measure = float(saved_settings[u"text-pulses-per-measure"])
             if pulses_per_measure > 0:
                 if fs.last_reading() >= 0:
                     flow_rate = round(fs.ave_reading() * 3600 / pulses_per_measure,3)
+                    flow_rate_raw = round(fs.last_reading() * 3600 / pulses_per_measure,3)
                 else:
                     flow_rate = -1
+                    flow_rate_raw = -1
                 qdict.update({u"flow_rate": round(flow_rate,1)})
+                qdict.update({u"flow_rate_raw": round(flow_rate_raw, 1)})
             else:
                 qdict.update({u"flow_rate": 0})
+                qdict.update({u"flow_rate_raw": 0})
         else:
             qdict.update({u"flow_rate": 0})
+            qdict.update({u"flow_rate_raw": 0})
 
             
         if u"text-volume-measure" in saved_settings.keys():
@@ -425,9 +413,9 @@ def notify_option_change(name, **kw):
     #  gv.sd is a dictionary containing the setting that changed.
     #  See "from options" in gv_reference.txt
 
+
 option_change = signal(u"option_change")
 option_change.connect(notify_option_change)
-
 
 """
 Run when plugin is loaded
@@ -436,6 +424,3 @@ update_settings()
 print(u"Flow Settings")
 print_settings()
 ls.load_settings()
-
-
-

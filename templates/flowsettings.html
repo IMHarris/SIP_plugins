@@ -44,7 +44,7 @@ $code:
         });
         
         jQuery("button#logButton").click(function(){
-            window.open("flow-sp", "_blank");
+            window.open("flow-sp", "_self");
         });
 
     });
@@ -98,7 +98,7 @@ $code:
             </tr>
             <tr>
                 <td style='text-transform: none;'>$_(u'Sensor connected'):</td>
-                <td id="text-sensor-connected" > ${runtime_values['sensor-connected'] if 'sensor-connected' in runtime_values else ''}</td>
+                <td id="text-sensor-connected" >${runtime_values['sensor-connected'] if 'sensor-connected' in runtime_values else ''}</td>
             </tr>
             <tr>
                 <td style='text-transform: none;'>Calibration mode</td>
@@ -107,7 +107,7 @@ $code:
         </table></br>
         
         <header>
-            <h3 id="hdr-calibration" hidden="hidden" >calibration data</h3>
+            <h3 id="hdr-calibration" hidden="hidden" >Calibration data</h3>
         </header>
         
         <table class="optionList" id="tbl-calibration", hidden="hidden">
@@ -117,7 +117,7 @@ $code:
                 <td id="lbl-cal-btn" rowspan="2"> <button type="button" id="btn-calibrate" background-color= #AAA hidden>Start Calibration</button></td>
             </tr>
             <tr>
-                <td id="lbl-usage" style="font-size:1.25em;text-align:left">Raised bed valve open</td>
+                <td id="lbl-usage" style="font-size:1.25em;text-align:left"> </td>
             </tr>
         </table>
         </br>
@@ -135,7 +135,8 @@ $code:
     //This code polls the server for flow rate    
     
     // User configuration variables
-    var apiURL = href.substr(0, href.lastIndexOf("/") + 1) + "flow-data" //page name delivering flow info in JSON
+    var href = window.location.href
+    var apiURL = href.substr(0, href.lastIndexOf("/") + 1) + "flow-data"  //page name delivering flow info in JSON
     const updateInterval = 3000  //flow info update frequency in milliseconds
     
     //Create a request variable and assign a new XMLHttpRequest object to it.
@@ -149,7 +150,7 @@ $code:
         } else if (arg == "flowrate") {
             //var flow_rate = round(flowData.pulse_rate/Number(settings['text-pulses-per-measure'])*100)/100;
             //var measure = settings['text-volume-measure']
-            document.getElementById("lbl-flow").textContent = String(flowData.flow_rate) + " " + flowData.volume_measure;
+            document.getElementById("lbl-flow").textContent = String(flowData.flow_rate_raw) + " " + flowData.volume_measure;
         }
     };
     
@@ -204,14 +205,14 @@ $code:
                 } else {
                     // we're in calibration mode, but calibration hasn't started yet (button not yet pressed)
                     //need to check that flow=0, so that we can enable the start button
-                    if (flowData.pulse_rate > 0) {
+                    if (flowData.pulse_rate > 0  || document.getElementById("lbl-flow").textContent == "Wait") {
                          fnPostFlow(flowData,"pulserate");
                          document.getElementById("btn-calibrate").disabled = true;
                          document.getElementById("lbl-usage").textContent = "Cannot start until flow = 0";
                      } else {
                          fnPostFlow(flowData,"pulserate");
                          document.getElementById("lbl-usage").textContent = "Ready to start";
-                         document.getElementById("btn-calibrate").disabled = false;                    
+                         document.getElementById("btn-calibrate").disabled = false;
                      }     
                 }
                 
