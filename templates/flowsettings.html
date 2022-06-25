@@ -214,12 +214,8 @@ $code:
                          document.getElementById("lbl-usage").textContent = "Ready to start";
                          document.getElementById("btn-calibrate").disabled = false;
                      }     
-                }
-                
-            } else {            
-                // We are in the default mode.  Post the flow information
-                fnPostFlow(flowData,"flowrate");
-            }
+                }  
+            } 
         }
     };
 
@@ -231,7 +227,9 @@ $code:
          let result = await fn(-1);
          while (fnCondition(result)) {
              await wait(milli);
-             result = await fn(result);
+             if (calibrationMode) {
+                 result = await fn(result);
+             }
          }
          return result;
     }

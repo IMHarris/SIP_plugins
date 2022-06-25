@@ -41,6 +41,9 @@ $code:
         jQuery("button#nDeleteAll").click(function(){
             jQuery("form#df").submit();
         });
+        jQuery("button#docButton").click(function(){
+            window.open("static/docs/plugins/flow-docs.html", "_blank"); 
+        });
         jQuery("button#settingsButton").click(function(){
             window.open("flow-settings", "_self");
         });
@@ -71,7 +74,6 @@ $code:
             <tr>
                 <!--<td style="font-size:2em;text-align:left" > <p id='lbl-flow' value='27 Gallons/hour '></p></td>-->
                 <td id='lbl-flow' style="font-size:2em;text-align:left" >  </td>
-                <td id="lbl-cal-btn" rowspan="2"> <button type="button" id="btn-calibrate" background-color= #AAA hidden>Start Calibration</button></td>
             </tr>
             <tr>
                 <td id="lbl-use" style="font-size:1.25em;text-align:left"></td>
@@ -139,72 +141,22 @@ $code:
     //Create a request variable and assign a new XMLHttpRequest object to it.
     var request = new XMLHttpRequest()
     
-    function fnPostFlow(flowData, arg) {
+    function fnPostFlow(flowData) {
         //Determines when the polling should stop based on the count of n
         //document.getElementById("lbl-flow").textContent = String(flowData.pulse_rate) + " hi";
-        if (arg == "pulserate") {
-            document.getElementById("lbl-flow").textContent = String(flowData.pulse_rate) + " pulses/second";
-        } else if (arg == "flowrate") {
-            document.getElementById("lbl-flow").textContent = String(flowData.flow_rate) + " " + flowData.volume_measure;
-            document.getElementById("lbl-use").textContent = String(flowData.water_use);
-            flowDatastr = String(flowData.valve_status);
-            document.getElementById("lbl-valves").innerHTML = flowDatastr.replaceAll(", ","<br>");
-        }
+        document.getElementById("lbl-flow").textContent = String(flowData.flow_rate) + " " + flowData.volume_measure;
+        document.getElementById("lbl-use").textContent = String(flowData.water_use);
+        flowDatastr = String(flowData.valve_status);
+        document.getElementById("lbl-valves").innerHTML = flowDatastr.replaceAll(", ","<br>");
+        
     };
     
     request.onreadystatechange = function() {
         //function called when XHR data is loaded
         if (this.readyState == 4 && this.status == 200) {
-            var flowData = JSON.parse(this.responseText);
-
-            if (calibrationMode) {             
-                if (isCalibrating) {
-                    if (resetCalibration) {
-                        // Start calibration button just pressed. Check again to ensure water has stopped
-                        // before initating calibration. When it has, reset the pulse start value and tell
-                        // the user to begin.
-                        if (flowData.pulse_rate == 0){
-                            // Button was just pressed and water is not flowing. Tell user to start water flow
-                            pulseStartValue = flowData.total_pulses;
-                            resetCalibration = false;
-                            document.getElementById("btn-calibrate").disabled = true;
-                            document.getElementById("lbl-flow").textContent = "Ready";
-                            document.getElementById("lbl-valves").textContent = "Start water flow into container";
-                        } else {
-                            // Button has been pressed, but water is flowing. Need to wait for water flow to stop
-                            fnPostFlow(flowData,"pulserate");
-                            document.getElementById("btn-calibrate").disabled = true;
-                            document.getElementById("lbl-valves").textContent = "Cannot start until flow = 0";
-                        }
-                    } else if (flowData.total_pulses - pulseStartValue > 0) {
-                        //user has started water flow
-                        document.getElementById("lbl-flow").textContent = String(Math.round((flowData.total_pulses  - pulseStartValue)*10)/10) + " pulses";
-                        document.getElementById("lbl-valves").textContent = String(flowData.pulse_rate) + " pulses/sec";
-                        if (flowData.pulse_rate > 0) {
-                            document.getElementById("btn-calibrate").innerHTML = "Restart Calibration";
-                            document.getElementById("btn-calibrate").disabled = true;
-                        } else {
-                            document.getElementById("btn-calibrate").disabled = false;
-                        }              
-                    } 
-                } else {
-                    // we're in calibration mode, but calibration hasn't started yet (button not yet pressed)
-                    //need to check that flow=0, so that we can enable the start button
-                    if (flowData.pulse_rate > 0) {
-                         fnPostFlow(flowData,"pulserate");
-                         document.getElementById("btn-calibrate").disabled = true;
-                         document.getElementById("lbl-valves").textContent = "Cannot start until flow = 0";
-                     } else {
-                         fnPostFlow(flowData,"pulserate");
-                         document.getElementById("lbl-valves").textContent = "Ready to start";
-                         document.getElementById("btn-calibrate").disabled = false;                    
-                     }     
-                }
-                
-            } else {            
-                // We are in the default mode.  Post the flow information
-                fnPostFlow(flowData,"flowrate");
-            }
+            var flowData = JSON.parse(this.responseText);        
+            //Post the flow information
+            fnPostFlow(flowData);
         }
     };
 
@@ -246,39 +198,7 @@ $code:
     
     // Let the polling of the server for flow info begin!
     poll(fnGet, fnCondition, updateInterval);
-    
-    //Code for flow calibration mode
-    
-    // btn-calibrate sets pulses to zero and starts the counting
-    isCalibrating=false;
-    resetCalibration = false;
-    document.getElementById("btn-calibrate").addEventListener("click", fnCalibrate);
-    
-    function fnCalibrate() {
-        // Start the calibration
-        resetCalibration = true;
-        isCalibrating = true;
-        document.getElementById("lbl-flow").textContent = "Wait";
-        document.getElementById("btn-calibrate").disabled = true;    
-    }
-    
-    calibrationMode = false;
-    function fnCalibrationMode() {
-        // Turns calibration mode on/off
-        if (false) {
-            // Turn calibration mode on
-            calibrationMode = true;
-            document.getElementById("lbl-flow").textContent = "Wait";
-            document.getElementById("btn-calibrate").disabled = true;
-            document.getElementById("btn-calibrate").hidden = false;
-        } else {
-            // Turn calibration mode off
-            calibrationMode = false;
-            isCalibrating = false
-            document.getElementById("btn-calibrate").hidden = true;
-            document.getElementById("btn-calibrate").innerHTML = "Start Calibration";
-        }    
-    }         
+             
 
 </script>
 

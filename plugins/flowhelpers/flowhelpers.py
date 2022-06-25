@@ -5,8 +5,11 @@ import gv
 from os.path import exists
 import json
 import codecs
+import time
 import io
 import ast
+import threading
+#import datetime
 
 """
 **********************************************
@@ -54,6 +57,7 @@ class FlowWindow:
     # Flow window class holds data about the current open valves
     def __init__(self,local_settings):
         self.ls = local_settings
+        self._lock = threading.Lock()
         self.start_time = 0
         self.end_time = 0
         self.start_pulses = 0
@@ -106,7 +110,7 @@ class FlowWindow:
             return round(((self.end_pulses-self.start_pulses)/self.ls.pulses_per_measure)*10)/10
         else:
             return 0
-        
+
     def valves_status_str(self):
         # Returns string noting which valves are open
         if len(self._open_valves_names) == 0:
@@ -118,6 +122,17 @@ class FlowWindow:
                 status_str = status_str + ", " + self._open_valves_names[i]
                 i = i + 1
         return status_str
+                
+    # def valves_str(self):
+    #     # Returns list of open valves by name
+    #     valve_list = []
+    #     if len(self.open_valves_names) >= 1:
+    #         valve_list.append(self.open_valves_names[0])
+    #         if len(self.open_valves_names) > 1:
+    #             i = 1
+    #             while i < len(self.open_valves_names):
+    #                 valve_list.append(self.open_valves_names[i])
+    #                 i = i + 1
 
     def duration(self):
         delta = self.end_time - self.start_time
@@ -128,62 +143,73 @@ class FlowWindow:
         Add flow window data to json log file - most recent first.
         If a record limit is specified (limit) the number of records is truncated.
         """
-        print("writing flow log ", str(self.ls.enable_logging))
-        if self.ls.enable_logging:
-            open_valves = ""
-            open_valves_str = ""
-            i = 0
-            for valve in self._open_valves:
-                # Create the string of valve numbers separated by commas
-                open_valves = open_valves + str(valve)
-                open_valves_str = open_valves_str + gv.snames[valve]
-                i=i+1
-                if i<len(self._open_valves):
-                    open_valves = open_valves + ","
-                    open_valves_str = open_valves_str + ","
-            
-            logline = (
-                u'{"'
-                + u"valves"
-                + u'":"'
-                + open_valves
-                + u'","'
-                + u'stations'
-                + u'":"'
-                + open_valves_str
-                + u'","'
-                + "usage"
-                + u'":'
-                + str(FlowWindow.usage(self))
-                + u',"'
-                + u'measure'
-                + u'":"'
-                + self.ls.volume_measure
-                + u'","'
-                + u'duration'
-                + u'":"'
-                + timestr(FlowWindow.duration(self))
-                + u'","'
-                + u'date'
-                + u'":"'
-                + self.start_time.strftime(u'%Y-%m-%d')
-                +'","'
-                + u'start'
-                + u'":"'
-                + self.start_time.strftime(u'%H:%M:%S')
-                + u'"}'
-            )
-            lines = []
-            lines.append(logline + u"\n")
-            log = read_log()
-            for r in log:
-                lines.append(json.dumps(r) + u"\n")
-            with codecs.open(u"./data/flowlog.json", u"w", encoding=u"utf-8") as f:
-                if self.ls.max_log_entries>0:
-                    f.writelines(lines[: self.ls.max_log_entries])
-                else:
-                    f.writelines(lines)
+        
+        if not self._lock.locked():
+            # if locked then this save came right on the heels of the last one, given such a short
+            # time difference, we will skip that save
+            with self._lock:
+                print("writing flow log ", str(self.ls.enable_logging))
+                if self.ls.enable_logging:
+                    open_valves = ""
+                    open_valves_str = ""
+                    i = 0
+                    for valve in self._open_valves:
+                        # Create the string of valve numbers separated by commas
+                        open_valves = open_valves + str(valve)
+                        open_valves_str = open_valves_str + gv.snames[valve]
+                        i=i+1
+                        if i<len(self._open_valves):
+                            open_valves = open_valves + ","
+                            open_valves_str = open_valves_str + ","
                     
+                    logline = (
+                        u'{"'
+                        + u"valves"
+                        + u'":"'
+                        + open_valves
+                        + u'","'
+                        + u'stations'
+                        + u'":"'
+                        + open_valves_str
+                        + u'","'
+                        + "usage"
+                        + u'":'
+                        + str(FlowWindow.usage(self))
+                        + u',"'
+                        + u'measure'
+                        + u'":"'
+                        + self.ls.volume_measure
+                        + u'","'
+                        + u'duration'
+                        + u'":"'
+                        + timestr(FlowWindow.duration(self))
+                        + u'","'
+                        + u'date'
+                        + u'":"'
+                        + self.start_time.strftime(u'%Y-%m-%d')
+                        +'","'
+                        + u'start'
+                        + u'":"'
+                        + self.start_time.strftime(u'%H:%M:%S')
+                        + u'"}'
+                    )
+                    lines = []
+                    lines.append(logline + u"\n")
+                    log = read_log()
+                    for r in log:
+                        lines.append(json.dumps(r) + u"\n")
+                    with codecs.open(u"./data/flowlog.json", u"w", encoding=u"utf-8") as f:
+                        if self.ls.max_log_entries>0:
+                            f.writelines(lines[: self.ls.max_log_entries])
+                        else:
+                            f.writelines(lines)
+                            
+
+class ValveNotice():
+    def __init__(self,switchtime, counter):
+        self.switch_time = switchtime
+        self.counter = counter
+        
 
 class FlowSmoother():
     # Averages the flow readings for a smoother readout
