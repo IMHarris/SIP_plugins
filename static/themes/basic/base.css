@@ -257,7 +257,7 @@ div#status {
 }
 
 /******** Button Styles **********/
-
+/*  ian */
 div.controls {
 	margin-top: 5px;
 	margin-bottom: 12px;
@@ -286,6 +286,11 @@ button.on {
 }
 button.off {
 	background-color: #7D1921;
+}
+button:disabled, button[disabled] {
+	/* background-color: #C7ff7F; */
+	pointer-events: none;
+	opacity: 0.3;
 }
 button.execute {
 	background-color: #2E3959;
