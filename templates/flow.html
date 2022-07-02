@@ -42,7 +42,7 @@ $code:
             jQuery("form#df").submit();
         });
         jQuery("button#docButton").click(function(){
-            window.open("static/docs/plugins/flow-docs.html", "_blank"); 
+            window.open("https://github.com/IMHarris/SIP_plugins/wiki", "_blank");
         });
         jQuery("button#settingsButton").click(function(){
             window.open("flow-settings", "_self");
@@ -65,22 +65,6 @@ $code:
         <button class="execute" id="docButton" type="button" >$_(u'Help')</button></div>
 
     <p>$_(u' ')</p>
-    <form id="pluginForm" action="${'/flow-save'}" method="get"> <!--Edit: Replace "proto-save" with URL of plugin's class for saving settings-->
-        <header>
-            <h3>Flow info</h3>
-        </header>
-        
-        <table class="optionList">
-            <tr>
-                <!--<td style="font-size:2em;text-align:left" > <p id='lbl-flow' value='27 Gallons/hour '></p></td>-->
-                <td id='lbl-flow' style="font-size:2em;text-align:left" >  </td>
-            </tr>
-            <tr>
-                <td id="lbl-use" style="font-size:1.25em;text-align:left"></td>
-            </tr>
-        </table>
-        
-    </form>
 
 </div>
 
@@ -144,11 +128,8 @@ $code:
     function fnPostFlow(flowData) {
         //Determines when the polling should stop based on the count of n
         //document.getElementById("lbl-flow").textContent = String(flowData.pulse_rate) + " hi";
-        document.getElementById("lbl-flow").textContent = String(flowData.flow_rate) + " " + flowData.volume_measure;
-        document.getElementById("lbl-use").textContent = String(flowData.water_use);
         flowDatastr = String(flowData.valve_status);
         document.getElementById("lbl-valves").innerHTML = flowDatastr.replaceAll(", ","<br>");
-        
     };
     
     request.onreadystatechange = function() {
@@ -198,7 +179,6 @@ $code:
     
     // Let the polling of the server for flow info begin!
     poll(fnGet, fnCondition, updateInterval);
-             
 
 </script>
 

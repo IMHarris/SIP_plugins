@@ -40,7 +40,7 @@ $code:
         });
 
         jQuery("button#docButton").click(function(){
-            window.open("static/docs/plugins/flow-docs.html", "_blank"); 
+            window.open("https://github.com/IMHarris/SIP_plugins/wiki", "_blank");
         });
         
         jQuery("button#logButton").click(function(){
@@ -183,12 +183,14 @@ $code:
                             pulseStartValue = flowData.total_pulses;
                             resetCalibration = false;
                             document.getElementById("btn-calibrate").disabled = true;
+                            document.getElementById("btn-calibrate").backgroundColor = "#DFE9D7";
                             document.getElementById("lbl-flow").textContent = "Ready";
                             document.getElementById("lbl-usage").textContent = "Start water flow into container";
                         } else {
                             // Button has been pressed, but water is flowing. Need to wait for water flow to stop
                             fnPostFlow(flowData,"pulserate");
                             document.getElementById("btn-calibrate").disabled = true;
+                            document.getElementById("btn-calibrate").backgroundColor = "#DFE9D7";
                             document.getElementById("lbl-usage").textContent = "Cannot start until flow = 0";
                         }
                     } else if (flowData.total_pulses - pulseStartValue > 0) {
@@ -198,8 +200,10 @@ $code:
                         if (flowData.pulse_rate > 0) {
                             document.getElementById("btn-calibrate").innerHTML = "Restart Calibration";
                             document.getElementById("btn-calibrate").disabled = true;
+                            document.getElementById("btn-calibrate").backgroundColor = "#DFE9D7";
                         } else {
                             document.getElementById("btn-calibrate").disabled = false;
+                            document.getElementById("btn-calibrate").backgroundColor = "#397F19";
                         }              
                     } 
                 } else {
@@ -208,11 +212,13 @@ $code:
                     if (flowData.pulse_rate > 0  || document.getElementById("lbl-flow").textContent == "Wait") {
                          fnPostFlow(flowData,"pulserate");
                          document.getElementById("btn-calibrate").disabled = true;
+                         document.getElementById("btn-calibrate").backgroundColor = "#DFE9D7"";
                          document.getElementById("lbl-usage").textContent = "Cannot start until flow = 0";
                      } else {
                          fnPostFlow(flowData,"pulserate");
                          document.getElementById("lbl-usage").textContent = "Ready to start";
                          document.getElementById("btn-calibrate").disabled = false;
+                         document.getElementById("btn-calibrate").backgroundColor = "#397F19";
                      }     
                 }  
             } 
