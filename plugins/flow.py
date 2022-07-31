@@ -4,7 +4,7 @@ from __future__ import print_function
 
 # Flow SIP addin
 import sys
-sys.path.insert(0, '/home/pi/SIP/plugins/flowhelpers')
+sys.path.insert(0, './plugins/flowhelpers')
 import flowhelpers
 import ast
 from blinker import signal
@@ -44,6 +44,8 @@ valve_messages = queue.Queue()  # Carries messages from notify_zone_change to th
 # Variables for the flow controller client
 client_addr = 0x44
 bus = SMBus(1)
+
+# Initiate notifications object
 
 # Add new URLs to access classes in this plugin.
 # fmt: off
@@ -93,9 +95,9 @@ def update_options():
 def changed_valves_loop():
     """
     Monitors valve_messages queue for notices that the valve state has changed and takes appropriate action
+    This def loop runs on its own thread
     """
     global changed_valves
-    # global valve_open
     global fw
     global valve_loop_running
 
@@ -323,6 +325,10 @@ def main_loop():
     flow_loop_running = True
     print(u"Flow plugin main loop initiated.")
     start_time = datetime.datetime.now()
+    # alarm.send(u"Flow plugin", txt=u"Hello World!", tag=u"f01")
+    # email_alert.send("SIP flow", subj="warning", msg="Hello world error message")
+    print(gv)
+
     while True:
         try:
             bytes = bus.read_i2c_block_data(client_addr, sensor_register, 4)
@@ -386,7 +392,7 @@ def notify_new_day(name, **kw):
         # This loop watches the flow
         flow_loop.start()
     if not valve_loop_running:
-        # This loop watches for valve changes
+        # This loop watches for valve state changes
         valve_loop.start()
 
 
@@ -395,17 +401,17 @@ new_day.connect(notify_new_day)
 
 
 # Function to be run when signal is recieved.
-def notify_alarm_toggled(name, **kw):
-    pass
-
-
-# instance of named signal
-alarm = signal(u"alarm_toggled")  
-# Connect signal to function to be run.
-alarm.connect(notify_alarm_toggled)
-
+# def notify_alarm_toggled(name, **kw):
+#     pass
+#
+# # instance of named signal
+# alarm = signal(u"alarm_toggled")
+# # Connect signal to function to be run.
+# alarm.connect(notify_alarm_toggled)
+email_alert = signal("email_alert")  # instantiate blinker signal.
 
 # Option settings
+
 def notify_option_change(name, **kw):
     update_options()
     #  gv.sd is a dictionary containing the setting that changed.
@@ -422,6 +428,7 @@ Run when plugin is loaded
 print(u"Flow Settings")
 print_settings()
 ls.load_settings()
+alarm = signal(u"user_notify")
 
 rate_footer = showInFooter()  # instantiate class to enable data in footer
 rate_footer.label = u"Flow rate"

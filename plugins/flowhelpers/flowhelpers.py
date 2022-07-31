@@ -36,7 +36,6 @@ class LocalSettings:
                 saved_settings = json.load(f)
             if u"text-pulses-per-measure" in saved_settings.keys():
                 pulses_per_measure = saved_settings["text-pulses-per-measure"]
-                print(pulses_per_measure,pulses_per_measure.replace(".","").isnumeric())
                 if pulses_per_measure.replace(".","").isnumeric():
                     self.pulses_per_measure = float(saved_settings["text-pulses-per-measure"])
             if u"enable-logging" in saved_settings.keys():
@@ -59,6 +58,23 @@ class LocalSettings:
                     self.max_log_entries = 0
             else:
                 self.max_log_entries = 0
+
+
+class Notice:
+    #  0: SIP flow sensor is reporting water movement, but all valves should be off
+    #  1: SIP has stations on, but sensor is not reporting water movement
+
+    def __init__(self):
+        msg_email = ""
+        msg_sms = ""
+        msg_voice = ""
+
+
+
+
+    def send_notice(self):
+
+
 
 
 class FlowWindow:
@@ -139,8 +155,11 @@ class FlowWindow:
         """
         
         if not self._lock.locked():
-            # if locked then this save came right on the heels of the last one, given such a short
-            # time difference, we will skip that save
+            # if locked, then this write_log request came right on the heels of the last one.  Valve changes come
+            # in one at a time, even if they are shut off simultaneously.  The flow window needs to
+            # collect these in a group. To make this work, the program puts write_log actions on a
+            # short delay ignoring requests that come in quickly on the heels of the last one.  All changes
+            # are then collected at the end of the delay
             with self._lock:
                 print("writing flow log ", str(self.ls.enable_logging))
                 if self.ls.enable_logging:
