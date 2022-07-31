@@ -28,6 +28,7 @@ sensor_register = 0x01  # 0x00 to receive sensor readings, 0x01 to have the sens
 # Number of readings to average for the flow rate reading display passed to flow smoother.
 # This is for display purposes only and does not change the usage
 # calculation in any way
+plugin_initiated = False
 fs = flowhelpers.FlowSmoother(4)
 settings_b4 = {}
 changed_valves = {}
@@ -40,6 +41,11 @@ valve_loop_running = False  # Notes if the valve loop has started
 ls = flowhelpers.LocalSettings()
 fw = flowhelpers.FlowWindow(ls)
 valve_messages = queue.Queue()  # Carries messages from notify_zone_change to the changed_valves_loop
+# Variables to note if notification plugins are loaded
+email_loaded = False
+sms_loaded = False
+voice_loaded = False
+
 
 # Variables for the flow controller client
 client_addr = 0x44
@@ -95,7 +101,7 @@ def update_options():
 def changed_valves_loop():
     """
     Monitors valve_messages queue for notices that the valve state has changed and takes appropriate action
-    This def loop runs on its own thread
+    This loop runs on its own thread
     """
     global changed_valves
     global fw
@@ -133,8 +139,8 @@ def changed_valves_loop():
                     fw.end_time = capture_time
                     fw.write_log()
             
-                elif  not fw.valve_open() and fw_new.valve_open():
-                    #Flow has started.  Start a new flow window
+                elif not fw.valve_open() and fw_new.valve_open():
+                    # Flow has started.  New flow window has already been created above
                     pass
             
                 elif fw.valve_open() and fw_new.valve_open():
@@ -202,6 +208,19 @@ class settings(ProtectedPage):
                 runtime_values.update({"sensor-connected":"yes"})
             else:
                 runtime_values.update({"sensor-connected":"no"})
+            if email_loaded:
+                runtime_values.update({"email-loaded": "yes"})
+            else:
+                runtime_values.update({"email-loaded": "no"})
+            if sms_loaded:
+                runtime_values.update({"sms-loaded": "yes"})
+            else:
+                runtime_values.update({"sms-loaded": "no"})
+            if voice_loaded:
+                runtime_values.update({"voice-loaded": "yes"})
+            else:
+                runtime_values.update({"voice-loaded": "no"})
+            print(runtime_values)
             
             with open(
                 u"./data/flow.json", u"r"
@@ -282,9 +301,10 @@ class flow(ProtectedPage):
         try:
             runtime_values = {"sensor-addr": u"0x%02X" % client_addr}
             if pulse_rate >= 0:
-                runtime_values.update({"sensor-connected": "no"})
+                runtime_values.update({"sensor-connected": "yes"})
             else:
                 runtime_values.update({"sensor-connected": "no"})
+
             with open(
                     u"./data/flow.json", u"r"
             ) as f:  # Read settings from json file if it exists
@@ -320,20 +340,21 @@ def main_loop():
     """
     global flow_loop_running
     global pulse_rate
-    # global valve_open
     global all_pulses
+    global fw
     flow_loop_running = True
     print(u"Flow plugin main loop initiated.")
     start_time = datetime.datetime.now()
     # alarm.send(u"Flow plugin", txt=u"Hello World!", tag=u"f01")
     # email_alert.send("SIP flow", subj="warning", msg="Hello world error message")
-    print(gv)
+    print(gv.plugin_menu)
 
     while True:
         try:
             bytes = bus.read_i2c_block_data(client_addr, sensor_register, 4)
             pulse_rate = int.from_bytes(bytes, u"little")
             fs.add_reading(pulse_rate)
+            fw.pulse_rate = pulse_rate
 
         except IOError:
             pulse_rate = -1
@@ -387,7 +408,25 @@ def notify_new_day(name, **kw):
     """
     App sends a new_day message after plugins are loaded.
     We'll use this as a trigger to start the threaded loops
+    and run any code that has to run after other plugins are loaded
     """
+    global email_loaded
+    global sms_loaded
+    global voice_loaded
+    global plugin_initiated
+    global fw
+
+    if not plugin_initiated:
+        for entry in gv.plugin_menu:
+            if entry[0] == "Email settings":
+                email_loaded = True
+
+        # Instantiate the first flow window
+        fw = flowhelpers.FlowWindow(ls)
+        fw.start_time = datetime.datetime.now()
+        fw.start_pulses = all_pulses
+        plugin_initiated = True
+
     if not flow_loop_running:
         # This loop watches the flow
         flow_loop.start()

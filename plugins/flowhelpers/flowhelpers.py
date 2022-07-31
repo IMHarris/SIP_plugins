@@ -8,13 +8,13 @@ import codecs
 import io
 import ast
 import threading
+import datetime
 
 """
 **********************************************
 Flow Plugin Helper functions
 **********************************************
 """
-
 
 class LocalSettings:
     
@@ -69,12 +69,8 @@ class Notice:
         msg_sms = ""
         msg_voice = ""
 
-
-
-
     def send_notice(self):
-
-
+        pass
 
 
 class FlowWindow:
@@ -82,15 +78,18 @@ class FlowWindow:
     def __init__(self, local_settings):
         self.ls = local_settings
         self._lock = threading.Lock()
-        self.start_time = 0
-        self.end_time = 0
+        self._start_time = datetime.datetime.now()
+        self.end_time = datetime.datetime.now()
         self.start_pulses = 0
         self.end_pulses = 0
+        self._pulse_rate = 0
         self._open_valves = []
         self._open_valves_names = []
         self._valve_states = []
         self._valve_open = False
         self.load_valve_states()
+        self._flow_warning1_given = False
+        self._flow_warning2_given = False
 
     def load_valve_states(self):
         i = 0
@@ -125,6 +124,34 @@ class FlowWindow:
     def master_station(self):
         return gv.sd[u"mas"]
 
+    @property
+    def start_time(self):
+        return self._start_time
+
+    @start_time.setter
+    def start_time(self,val):
+        self._start_time = val
+        self.clear_warning_flags()
+
+    @property
+    def pulse_rate(self):
+        return self._pulse_rate
+
+    @pulse_rate.setter
+    def pulse_rate(self, val):
+        delta = datetime.datetime.now() - self.start_time
+        duration = delta.total_seconds()
+        print("got the pulse rate", duration, self.valve_open(), val)
+        if not self._flow_warning1_given:
+            if duration > 3 and self.valve_open() and val == 0:
+                print("Flow error 1 encountered")
+                self._flow_warning1_given = True
+        if not self._flow_warning2_given:
+            if duration > 3 and not self.valve_open() and val > 3:
+                print("Flow error 2 encountered")
+                self._flow_warning2_given = True
+        self._pulse_rate = val
+
     def usage(self):
         # Returns water usage in current flow window
         if self.ls.pulses_per_measure > 0:
@@ -145,7 +172,7 @@ class FlowWindow:
         return status_str
 
     def duration(self):
-        delta = self.end_time - self.start_time
+        delta = self.end_time - self._start_time
         return int(delta.total_seconds())
 
     def write_log(self):
@@ -153,7 +180,6 @@ class FlowWindow:
         Add flow window data to json log file - most recent first.
         If a record limit is specified (limit) the number of records is truncated.
         """
-        
         if not self._lock.locked():
             # if locked, then this write_log request came right on the heels of the last one.  Valve changes come
             # in one at a time, even if they are shut off simultaneously.  The flow window needs to
@@ -215,6 +241,10 @@ class FlowWindow:
                             f.writelines(lines[: self.ls.max_log_entries])
                         else:
                             f.writelines(lines)
+
+    def clear_warning_flags(self):
+        self._flow_warning1_given = False
+        self._flow_warning2_given = False
                             
 
 class ValveNotice:

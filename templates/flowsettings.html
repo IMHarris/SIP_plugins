@@ -67,14 +67,9 @@ $code:
     <p>$_(u' ')</p>
     <form id="pluginForm" action="${'/flow-save'}" method="get"> 
         <header>
-            <h3>Settings</h3>
+            <h3>General</h3>
         </header>
         <table class="optionList">
-            <!--Check boxes-->
-            <thead>
-                <th class="stationNumber">$_(u' ')</th>  <!--Edit: Optional-->
-                <th class="stationNumber">$_(u' ')</th>  <!--Edit: Optional-->
-            </thead>
             <tr>
                 <td style='text-transform: none;'>$_(u'Volume measure'):</td>
                 <td><input type="text" name="text-volume-measure" id="lbl3" value="${settings['text-volume-measure'] if 'text-volume-measure' in settings else ''}"></td>
@@ -105,7 +100,27 @@ $code:
                 <td><input type="checkbox" id="check-calibration" ${'disabled' if runtime_values['sensor-connected'] == 'no' else ''}  ></td>
             </tr>
         </table></br>
-        
+        $if runtime_values['email-loaded'] == 'yes' or runtime_values['sms-loaded'] == 'yes' or runtime_values['voice-loaded'] == 'yes':
+            <header><h3>Notifications</h3>
+            </header>
+            <table class="optionList">
+            $if runtime_values['email-loaded'] == 'yes':
+                <tr>
+                <td style='text-transform: none;'>$_(u'Email events to report'):</td>
+                <td><input type="text" name="email-events" id="lbl3" value="${settings['email-events'] if 'email-events' in settings else ''}"></td></td>
+                </tr>
+            $if runtime_values['sms-loaded'] == 'yes':
+                <tr>
+                <td style='text-transform: none;'>$_(u'SMS events to report'):</td>
+                <td><input type="text" name="sms-events" id="lbl3" value="${settings['sms-events'] if 'sms-events' in settings else ''}"></td></td>
+                </tr>
+            $if runtime_values['voice-loaded'] == 'yes':
+                <tr>
+                <td style='text-transform: none;'>$_(u'Voice events to report'):</td>
+                <td><input type="text" name="voice-events" id="lbl3" value="${settings['voice-events'] if 'voice-events' in settings else ''}"></td></td>
+                </tr>
+            </table>
+
         <header>
             <h3 id="hdr-calibration" hidden="hidden" >Calibration data</h3>
         </header>
