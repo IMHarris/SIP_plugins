@@ -24,7 +24,7 @@ from webpages import showInFooter  # Enable plugin to display station data on ti
 # from webpages import showOnTimeline  # Enable plugin to display station data on timeline
 
 # Global variables
-sensor_register = 0x01  # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
+SENSOR_REGISTER = 0x01  # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
 # Number of readings to average for the flow rate reading display passed to flow smoother.
 # This is for display purposes only and does not change the usage
 # calculation in any way
@@ -43,12 +43,11 @@ fw = flowhelpers.FlowWindow(ls)
 valve_messages = queue.Queue()  # Carries messages from notify_zone_change to the changed_valves_loop
 # Variables to note if notification plugins are loaded
 email_loaded = False
-sms_loaded = False
+sms_loaded = True
 voice_loaded = False
 
-
 # Variables for the flow controller client
-client_addr = 0x44
+CLIENT_ADDR = 0x44
 bus = SMBus(1)
 
 # Initiate notifications object
@@ -61,7 +60,8 @@ urls.extend([
     u"/flow-data", u"plugins.flow.flowdata",
     u"/flow-settings", u"plugins.flow.settings",
     u"/cfl", u"plugins.flow.clear_log",
-    u"/wfl", u"plugins.flow.download_csv"
+    u"/wfl", u"plugins.flow.download_csv",
+    u"/wfr", u"plugins.flow.download_flowrate_csv"
     ])
 
 # Add this plugin to the PLUGINS menu ["Menu Name", "URL"], (Optional)
@@ -89,7 +89,7 @@ def print_settings(lpad=2):
     """
     Prints the flow settings
     """
-    print(u"{}Master flow sensor address: {}".format(" " * lpad, u"0x%02X" % client_addr))
+    print(u"{}Master flow sensor address: {}".format(" " * lpad, u"0x%02X" % CLIENT_ADDR))
    
         
 def update_options():
@@ -166,7 +166,7 @@ class clear_log(ProtectedPage):
 
 class download_csv(ProtectedPage):
     """
-    Downloads log as csv
+    Downloads usage log as csv
     """
     def GET(self):
         records = flowhelpers.read_log()
@@ -203,11 +203,11 @@ class settings(ProtectedPage):
     def GET(self):
         
         try:
-            runtime_values = {"sensor-addr":u"0x%02X" % client_addr}
+            runtime_values = {"sensor-addr": u"0x%02X" % CLIENT_ADDR}
             if pulse_rate >=0:
-                runtime_values.update({"sensor-connected":"yes"})
+                runtime_values.update({"sensor-connected": "yes"})
             else:
-                runtime_values.update({"sensor-connected":"no"})
+                runtime_values.update({"sensor-connected": "no"})
             if email_loaded:
                 runtime_values.update({"email-loaded": "yes"})
             else:
@@ -220,8 +220,7 @@ class settings(ProtectedPage):
                 runtime_values.update({"voice-loaded": "yes"})
             else:
                 runtime_values.update({"voice-loaded": "no"})
-            print(runtime_values)
-            
+
             with open(
                 u"./data/flow.json", u"r"
             ) as f:  # Read settings from json file if it exists
@@ -229,8 +228,63 @@ class settings(ProtectedPage):
         except IOError:  # If file does not exist return empty value
             settings = {}
 
-        log = flowhelpers.read_log()
+        # Reformat the flow data file
+        x = ls.load_avg_flow_data()
+        log = []
+        for (k, v) in x.items():
+            # print("key", k)
+            # print("value", v)
+            flow_rate = round(v["rate"] * 3600 / ls.pulses_per_measure, 1)
+            flow_rate_str = "{:,.1f} {}/hr".format(flow_rate, ls.volume_measure)
+            logline = (
+                u'{"'
+                + u'valve'
+                + u'":"'
+                + gv.snames[int(k)]
+                + u'","'
+                + u'rate'
+                + u'":"'
+                + flow_rate_str
+                + u'","'
+                + u"time"
+                + u'":"'
+                + str(v["time"])
+                + u'"}'
+            )
+            # print("logline", logline)
+            rec = json.loads(logline)
+            log.append(rec)
+
+        # print('runtime values:', runtime_values)
+        # print("settings", settings)
+        # print("logline", log)
         return template_render.flowsettings(settings, runtime_values, log)  # open flow settings page
+
+
+class download_flowrate_csv(ProtectedPage):
+    """
+    Downloads flow rates as csv
+    """
+    def GET(self):
+        x = ls.load_avg_flow_data()
+        data = _(u"Station, Rate, Units, Recorded") + u"\n"
+        for (k, v) in x.items():
+            flow_rate = round(v["rate"] * 3600 / ls.pulses_per_measure, 1)
+            flow_rate_str = "{:,.1f} {}/hr".format(flow_rate, ls.volume_measure)
+            data += (
+                '"'
+                + gv.snames[int(k)]
+                + u'", '
+                + '{:.1f}'.format(flow_rate)
+                + u', "'
+                + '{}/hr'.format(ls.volume_measure)
+                + '", '
+                + str(v["time"])
+                + '\n'
+            )
+
+        web.header(u"Content-Type", u"text/csv")
+        return data
 
 
 class save_settings(ProtectedPage):
@@ -294,12 +348,13 @@ class flowdata(ProtectedPage):
         
         return json.dumps(qdict)
 
+
 class flow(ProtectedPage):
     """View Log"""
 
     def GET(self):
         try:
-            runtime_values = {"sensor-addr": u"0x%02X" % client_addr}
+            runtime_values = {"sensor-addr": u"0x%02X" % CLIENT_ADDR}
             if pulse_rate >= 0:
                 runtime_values.update({"sensor-connected": "yes"})
             else:
@@ -309,13 +364,13 @@ class flow(ProtectedPage):
                     u"./data/flow.json", u"r"
             ) as f:  # Read settings from json file if it exists
                 settings = json.load(f)
-                print(settings)
+                print(json.dumps(settings))
         except IOError:  # If file does not exist return empty value
             settings = {}
             # Default settings. can be list, dictionary, etc.
 
         records = flowhelpers.read_log()
-
+        # print("hello")
         return template_render.flow(settings, runtime_values, records)
 
 
@@ -345,16 +400,14 @@ def main_loop():
     flow_loop_running = True
     print(u"Flow plugin main loop initiated.")
     start_time = datetime.datetime.now()
-    # alarm.send(u"Flow plugin", txt=u"Hello World!", tag=u"f01")
-    # email_alert.send("SIP flow", subj="warning", msg="Hello world error message")
-    print(gv.plugin_menu)
 
     while True:
         try:
-            bytes = bus.read_i2c_block_data(client_addr, sensor_register, 4)
+            bytes = bus.read_i2c_block_data(CLIENT_ADDR, SENSOR_REGISTER, 4)
             pulse_rate = int.from_bytes(bytes, u"little")
             fs.add_reading(pulse_rate)
-            fw.pulse_rate = pulse_rate
+            fw.set_pulse_values(pulse_rate, all_pulses)
+            # fw.pulse_rate = pulse_rate
 
         except IOError:
             pulse_rate = -1
@@ -367,7 +420,7 @@ def main_loop():
             start_time = stop_time
 
         # Update the application footer with flow information
-        rate_footer.label = u"Flow rate"
+        # rate_footer.label = u"Flow rate"
         rate_footer.unit = u" " + ls.volume_measure + u"/hr"
         if ls.pulses_per_measure == 0:
             rate_footer.val = "N/A"
@@ -376,7 +429,7 @@ def main_loop():
         else:
             rate_footer.val = "0"
 
-        volume_footer.label = u"Water usage"
+        # volume_footer.label = u"Water usage"
         if ls.pulses_per_measure > 0:
             volume_footer.val = f'{round((all_pulses - fw.start_pulses) / ls.pulses_per_measure, 1):,}'
         else:
@@ -437,17 +490,6 @@ def notify_new_day(name, **kw):
 
 new_day = signal(u"new_day")
 new_day.connect(notify_new_day)
-
-
-# Function to be run when signal is recieved.
-# def notify_alarm_toggled(name, **kw):
-#     pass
-#
-# # instance of named signal
-# alarm = signal(u"alarm_toggled")
-# # Connect signal to function to be run.
-# alarm.connect(notify_alarm_toggled)
-email_alert = signal("email_alert")  # instantiate blinker signal.
 
 # Option settings
 

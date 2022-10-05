@@ -84,7 +84,7 @@ $code:
                 <td><input type="checkbox" name="chk-enable-logging"  ${"checked" if 'chk-enable-logging' in settings else ""}></td>
             </tr>
             <tr>
-                <td style='text-transform: none;'>$_(u'Max log entries'):</td>
+                <td style='text-transform: none;' >$_(u'Max log entries'):</td>
                 <td><input type="text" name="text-max-log-entries" id="max-log-entries" value="${settings['text-max-log-entries'] if 'text-max-log-entries' in settings else ''}"></td>
             </tr>
             <tr>
@@ -106,13 +106,21 @@ $code:
             <table class="optionList">
             $if runtime_values['email-loaded'] == 'yes':
                 <tr>
-                <td style='text-transform: none;'>$_(u'Email events to report'):</td>
-                <td><input type="text" name="email-events" id="lbl3" value="${settings['email-events'] if 'email-events' in settings else ''}"></td></td>
+                <td id="email-events" style='text-transform: none;'>$_(u'Email events to report'):</td>
+                <td><input type="text" name="email-events" id="txt-email-events" value="${settings['email-events'] if 'email-events' in settings else ''}"></td></td>
+                </tr>
+                <tr>
+                <td id="email-variance" style='text-transform: none;'>$_(u'Email Notify when flow differs by this %'):</td>
+                <td><input type="text" name="email-variance" id="txt-email-variance" value="${settings['email-variance'] if 'email-variance' in settings else ''}"></td></td>
                 </tr>
             $if runtime_values['sms-loaded'] == 'yes':
                 <tr>
                 <td style='text-transform: none;'>$_(u'SMS events to report'):</td>
                 <td><input type="text" name="sms-events" id="lbl3" value="${settings['sms-events'] if 'sms-events' in settings else ''}"></td></td>
+                </tr>
+                <tr>
+                <td style='text-transform: none;'>$_(u'SMS Notify when flow differs by this %'):</td>
+                <td><input type="text" name="sms-variance" id="lbl3" value="${settings['sms-variance'] if 'sms-variance' in settings else ''}"></td></td>
                 </tr>
             $if runtime_values['voice-loaded'] == 'yes':
                 <tr>
@@ -137,13 +145,46 @@ $code:
         </table>
         </br>
         </br>
-    
     </form>
     
 <div class="controls">
     <button id="cSubmit" class="submit"><b>$_(u'Submit')</b></button>
     <button id="cCancel" class="cancel danger">$_(u'Cancel')</button>
 </div>
+</div>
+<div id="log">
+    <header>
+        <h3>Last measured flow rates*</h3>
+        <style>
+        #q {
+        text-align: right;
+        }
+        </style>
+    </header>
+   <p>$_(u'Download log as ')<a href="/wfr">csv</a>.</p>
+    <table class="logList">
+    	<thead>
+        <tr class="log_rec">
+            <th>$_(u'Station')</th>
+            <th>$_(u'Rate')</th>
+            <th>$_(u'Recorded')</th>
+        </tr>
+        </thead>
+
+        <tbody>
+        $ odd = 1
+        $for r in records:
+        $ event = r #  ast.literal_eval(json.loads(r))
+        <tr class="log_rec ${'odd' if odd else 'even'}">
+            <td>${event["valve"]}</td>
+            <td id ="q" >${event["rate"]}</td>
+            <td>${formatTime(event["time"])}</td>
+        </tr>
+        $ odd = 1 - odd
+        </tbody>
+    </table>
+    <p>*Station must run independently for 90 seconds to have its flow rate recorded</p>
+</br>
 </div>
 
 <script>   
@@ -313,7 +354,24 @@ $code:
             document.getElementById("tbl-calibration").hidden =true;
             document.getElementById("hdr-calibration").hidden =true;
         }    
-    }         
+    }
+    $if runtime_values['email-loaded'] == 'yes':
+        //Code for displaying notification variance boxes
+        document.getElementById("txt-email-events").addEventListener("change", fnEmailEventChange);
+
+        //alert(document.getElementById("txt-email-events").value)
+        function fnEmailEventChange() {
+            // enable/disable the % variance textbox if error 3 is requested/not requested
+            //alert("hello");
+            EmailEvents = document.getElementById("txt-email-events").value;
+            ArrayEmailEvents = EmailEvents.split(",");
+            if (ArrayEmailEvents.includes("3")) {
+                document.getElementById("txt-email-variance").hidden = false;
+            } else {
+                document.getElementById("txt-email-variance").hidden = true;
+            }
+        }
+
 
 </script>
 
