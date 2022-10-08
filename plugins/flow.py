@@ -29,7 +29,7 @@ SENSOR_REGISTER = 0x01  # 0x00 to receive sensor readings, 0x01 to have the sens
 # This is for display purposes only and does not change the usage
 # calculation in any way
 plugin_initiated = False
-fs = flowhelpers.FlowSmoother(4)
+fs = flowhelpers.FlowSmoother(5)
 settings_b4 = {}
 changed_valves = {}
 all_pulses = 0  # Calculated pulses since beginning of time
@@ -43,7 +43,7 @@ fw = flowhelpers.FlowWindow(ls)
 valve_messages = queue.Queue()  # Carries messages from notify_zone_change to the changed_valves_loop
 # Variables to note if notification plugins are loaded
 email_loaded = False
-sms_loaded = True
+sms_loaded = False
 voice_loaded = False
 
 # Variables for the flow controller client
@@ -220,6 +220,7 @@ class settings(ProtectedPage):
                 runtime_values.update({"voice-loaded": "yes"})
             else:
                 runtime_values.update({"voice-loaded": "no"})
+            runtime_values.update({"valve-measure-time": str(flowhelpers.IGNORE_INITIAL + flowhelpers.MEASURE_TIME)})
 
             with open(
                 u"./data/flow.json", u"r"
@@ -232,9 +233,7 @@ class settings(ProtectedPage):
         x = ls.load_avg_flow_data()
         log = []
         for (k, v) in x.items():
-            # print("key", k)
-            # print("value", v)
-            flow_rate = round(v["rate"] * 3600 / ls.pulses_per_measure, 1)
+            flow_rate = round(v["rate"] / ls.pulses_per_measure, 1)
             flow_rate_str = "{:,.1f} {}/hr".format(flow_rate, ls.volume_measure)
             logline = (
                 u'{"'
@@ -270,12 +269,12 @@ class download_flowrate_csv(ProtectedPage):
         data = _(u"Station, Rate, Units, Recorded") + u"\n"
         for (k, v) in x.items():
             flow_rate = round(v["rate"] * 3600 / ls.pulses_per_measure, 1)
-            flow_rate_str = "{:,.1f} {}/hr".format(flow_rate, ls.volume_measure)
+            # flow_rate_str = "{:,.1f} {}/hr".format(flow_rate, ls.volume_measure)
             data += (
                 '"'
                 + gv.snames[int(k)]
                 + u'", '
-                + '{:.1f}'.format(flow_rate)
+                + '{:.1f}'.format(round(flow_rate / ls.pulses_per_measure, 1))
                 + u', "'
                 + '{}/hr'.format(ls.volume_measure)
                 + '", '
@@ -299,13 +298,35 @@ class save_settings(ProtectedPage):
         qdict = (
             web.input()
         )  # Dictionary of values returned as query string from settings page.
-        
+        # Clean up and sort the events fields
+        if "email-events" in qdict.keys():
+            email_events = qdict["email-events"].replace(" ", "")
+            email_events_list = email_events.split(",")
+            email_events_list2 = []
+            for event in email_events_list:
+                if len(event) > 0:
+                    email_events_list2.append(event)
+            qdict["email-events"] = ",".join(sorted(email_events_list2))
+        if "sms-events" in qdict.keys():
+            sms_events = qdict["sms-events"].replace(" ", "")
+            sms_events_list = sms_events.split(",")
+            sms_events_list2 = []
+            for event in sms_events_list:
+                if len(event) > 0:
+                    sms_events_list2.append(event)
+            qdict["sms-events"] = ",".join(sorted(sms_events_list2))
+        if "voice-events" in qdict.keys():
+            voice_events = qdict["voice-events"].replace(" ", "")
+            voice_events_list = voice_events.split(",")
+            voice_events_list2 = []
+            for event in voice_events_list:
+                if len(event) > 0:
+                    voice_events_list2.append(event)
+            qdict["voice-events"] = ",".join(sorted(voice_events_list2))
         with open(u"./data/flow.json", u"w") as f:  # Edit: change name of json file
             json.dump(qdict, f)  # save to file
         ls.load_settings()
-        # print(u"Flow settings after update")
-        # print_settings()
-        # actions_on_change_settings()
+
         raise web.seeother(u"/")  # Return user to home page.
  
    
@@ -420,7 +441,6 @@ def main_loop():
             start_time = stop_time
 
         # Update the application footer with flow information
-        # rate_footer.label = u"Flow rate"
         rate_footer.unit = u" " + ls.volume_measure + u"/hr"
         if ls.pulses_per_measure == 0:
             rate_footer.val = "N/A"
@@ -429,7 +449,6 @@ def main_loop():
         else:
             rate_footer.val = "0"
 
-        # volume_footer.label = u"Water usage"
         if ls.pulses_per_measure > 0:
             volume_footer.val = f'{round((all_pulses - fw.start_pulses) / ls.pulses_per_measure, 1):,}'
         else:

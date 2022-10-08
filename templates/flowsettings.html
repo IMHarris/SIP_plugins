@@ -106,26 +106,51 @@ $code:
             <table class="optionList">
             $if runtime_values['email-loaded'] == 'yes':
                 <tr>
-                <td id="email-events" style='text-transform: none;'>$_(u'Email events to report'):</td>
-                <td><input type="text" name="email-events" id="txt-email-events" value="${settings['email-events'] if 'email-events' in settings else ''}"></td></td>
-                </tr>
-                <tr>
-                <td id="email-variance" style='text-transform: none;'>$_(u'Email Notify when flow differs by this %'):</td>
-                <td><input type="text" name="email-variance" id="txt-email-variance" value="${settings['email-variance'] if 'email-variance' in settings else ''}"></td></td>
-                </tr>
+                    <td id="lbl-email-events" style='text-transform: none;'>
+                      Email events to report:
+                    </td>
+                    <td><input type="text" name="email-events" id="txt-email-events" value="${settings['email-events'] if 'email-events' in settings else ''}"></td>
+                  </tr>
+                  <tr>
+                    <td style='text-transform: none;'>
+                      <div id="lbl-email-variance">&nbsp&nbsp&nbspNotify when flow differs by this %:</div>
+                    </td>
+                    <td ><input type="text" name="email-variance" id="txt-email-variance" value="${settings['email-variance'] if 'email-variance' in settings else ''}"></td>
+                  </tr>
+
             $if runtime_values['sms-loaded'] == 'yes':
                 <tr>
-                <td style='text-transform: none;'>$_(u'SMS events to report'):</td>
-                <td><input type="text" name="sms-events" id="lbl3" value="${settings['sms-events'] if 'sms-events' in settings else ''}"></td></td>
+                    <td id="lbl-sms-events" style='text-transform: none;'>
+                        SMS events to report:
+                    </td>
+                    <td><input type="text" name="sms-events" id="txt-sms-events"
+                               value="${settings['sms-events'] if 'sms-events' in settings else ''}"></td>
                 </tr>
                 <tr>
-                <td style='text-transform: none;'>$_(u'SMS Notify when flow differs by this %'):</td>
-                <td><input type="text" name="sms-variance" id="lbl3" value="${settings['sms-variance'] if 'sms-variance' in settings else ''}"></td></td>
+                    <td style='text-transform: none;'>
+                        <div id="lbl-sms-variance">
+                            &nbsp&nbsp&nbspNotify when flow differs by this %:
+                        </div>
+                    </td>
+                    <td><input type="text" name="sms-variance" id="txt-sms-variance"
+                               value="${settings['sms-variance'] if 'sms-variance' in settings else ''}"></td>
                 </tr>
             $if runtime_values['voice-loaded'] == 'yes':
                 <tr>
-                <td style='text-transform: none;'>$_(u'Voice events to report'):</td>
-                <td><input type="text" name="voice-events" id="lbl3" value="${settings['voice-events'] if 'voice-events' in settings else ''}"></td></td>
+                    <td id="lbl-voice-events" style='text-transform: none;'>
+                        Voice events to report:
+                    </td>
+                    <td><input type="text" name="voice-events" id="txt-voice-events"
+                               value="${settings['voice-events'] if 'voice-events' in settings else ''}"></td>
+                </tr>
+                <tr>
+                    <td style='text-transform: none;'>
+                        <div id="lbl-voice-variance">
+                            &nbsp&nbsp&nbspNotify when flow differs by this %:
+                        </div>
+                    </td>
+                    <td><input type="text" name="voice-variance" id="txt-voice-variance"
+                               value="${settings['voice-variance'] if 'voice-variance' in settings else ''}"></td>
                 </tr>
             </table>
 
@@ -183,7 +208,7 @@ $code:
         $ odd = 1 - odd
         </tbody>
     </table>
-    <p>*Station must run independently for 90 seconds to have its flow rate recorded</p>
+    <p>*Station must run independently for at least ${runtime_values['valve-measure-time']} seconds to have its flow rate recorded</p>
 </br>
 </div>
 
@@ -355,23 +380,121 @@ $code:
             document.getElementById("hdr-calibration").hidden =true;
         }    
     }
+
+    $if runtime_values['email-loaded'] == 'yes' or runtime_values['sms-loaded'] == 'yes' or runtime_values['voice-loaded'] == 'yes':
+
+        var lblVariance = "";
+        var rgbaLblVariance = "";
+        var txtVariance = "";
+        var rgbaTxtVariance = "";
+
     $if runtime_values['email-loaded'] == 'yes':
         //Code for displaying notification variance boxes
         document.getElementById("txt-email-events").addEventListener("change", fnEmailEventChange);
+        lblVariance = getComputedStyle(document.getElementById("lbl-email-variance")).getPropertyValue("color");
+        rgbaLblVariance = lblVariance.match(/[\d.]+/g);
+        // If alpha is not there, add it:
+        if (rgbaLblVariance.length === 3) {
+            rgbaLblVariance.push(1);
+        }
+        txtVariance = getComputedStyle(document.getElementById("txt-email-variance")).getPropertyValue("color");
+        rgbaTxtVariance = txtVariance.match(/[\d.]+/g);
+        // If alpha is not there, add it:
+        if (rgbaTxtVariance.length === 3) {
+            rgbaTxtVariance.push(1);
+        }
+        fnEmailEventChange();
 
-        //alert(document.getElementById("txt-email-events").value)
         function fnEmailEventChange() {
-            // enable/disable the % variance textbox if error 3 is requested/not requested
-            //alert("hello");
-            EmailEvents = document.getElementById("txt-email-events").value;
-            ArrayEmailEvents = EmailEvents.split(",");
-            if (ArrayEmailEvents.includes("3")) {
-                document.getElementById("txt-email-variance").hidden = false;
+            // enable or disable the % variance textbox if event 3 is requested or not requested
+            events = document.getElementById("txt-email-events").value;
+            arrayEvents = events.trim().split(",");
+            // Trim array elements
+            for (i in arrayEvents) {
+                arrayEvents[i] = arrayEvents[i].trim();
+            }
+            if (arrayEvents.includes("3")) {
+                document.getElementById("txt-email-variance").disabled = false;
+                document.getElementById("txt-email-variance").style.color = "rgba(" + rgbaTxtVariance + ")";
+                document.getElementById("lbl-email-variance").style.color = "rgba(" + rgbaLblVariance + ")";
             } else {
-                document.getElementById("txt-email-variance").hidden = true;
+                document.getElementById("txt-email-variance").disabled = true;
+                document.getElementById("txt-email-variance").style.color = "rgba(0,0,0,0.2)";
+                document.getElementById("lbl-email-variance").style.color = "rgba(0,0,0,0.2)";
             }
         }
 
+    $if runtime_values['sms-loaded'] == 'yes':
+        //Code for displaying notification variance boxes
+        document.getElementById("txt-sms-events").addEventListener("change", fnSmsEventChange);
+        lblVariance = getComputedStyle(document.getElementById("lbl-sms-variance")).getPropertyValue("color");
+        rgbaLblVariance = lblVariance.match(/[\d.]+/g);
+        // If alpha is not there, add it:
+        if (rgbaLblVariance.length === 3) {
+            rgbaLblVariance.push(1);
+        }
+        txtVariance = getComputedStyle(document.getElementById("txt-sms-variance")).getPropertyValue("color");
+        rgbaTxtVariance = txtVariance.match(/[\d.]+/g);
+        // If alpha is not there, add it:
+        if (rgbaTxtVariance.length === 3) {
+            rgbaTxtVariance.push(1);
+        }
+        fnSmsEventChange();
+
+        function fnSmsEventChange() {
+            // enable or disable the % variance textbox if event 3 is requested or not requested
+            events = document.getElementById("txt-sms-events").value;
+            arrayEvents = events.trim().split(",");
+            // Trim array elements
+            for (i in arrayEvents) {
+                arrayEvents[i] = arrayEvents[i].trim();
+            }
+            if (arrayEvents.includes("3")) {
+                document.getElementById("txt-sms-variance").disabled = false;
+                document.getElementById("txt-sms-variance").style.color = "rgba(" + rgbaTxtVariance + ")";
+                document.getElementById("lbl-sms-variance").style.color = "rgba(" + rgbaLblVariance + ")";
+            } else {
+                document.getElementById("txt-sms-variance").disabled = true;
+                document.getElementById("txt-sms-variance").style.color = "rgba(0,0,0,0.2)";
+                document.getElementById("lbl-sms-variance").style.color = "rgba(0,0,0,0.2)";
+            }
+        }
+
+    $if runtime_values['voice-loaded'] == 'yes':
+        //Code for displaying notification variance boxes
+        document.getElementById("txt-voice-events").addEventListener("change", fnVoiceEventChange);
+        lblVariance = getComputedStyle(document.getElementById("lbl-voice-variance")).getPropertyValue("color");
+        rgbaLblVariance = lblVariance.match(/[\d.]+/g);
+        // If alpha is not there, add it:
+        if (rgbaLblVariance.length === 3) {
+            rgbaLblVariance.push(1);
+        }
+        txtVariance = getComputedStyle(document.getElementById("txt-voice-variance")).getPropertyValue("color");
+        rgbaTxtVariance = txtVariance.match(/[\d.]+/g);
+        // If alpha is not there, add it:
+        if (rgbaTxtVariance.length === 3) {
+            rgbaTxtVariance.push(1);
+        }
+        fnVoiceEventChange();
+
+        function fnVoiceEventChange() {
+            // enable or disable the % variance textbox if event 3 is requested or not requested
+            events = document.getElementById("txt-voice-events").value;
+            arrayEvents = events.trim().split(",");
+            // Trim array elements
+            for (i in arrayEvents) {
+                arrayEvents[i] = arrayEvents[i].trim();
+            }
+            if (arrayEvents.includes("3")) {
+                document.getElementById("txt-voice-variance").disabled = false;
+                document.getElementById("txt-voice-variance").style.color = "rgba(" + rgbaTxtVariance + ")";
+                document.getElementById("lbl-voice-variance").style.color = "rgba(" + rgbaLblVariance + ")";
+            } else {
+                document.getElementById("txt-voice-variance").disabled = true;
+                document.getElementById("txt-voice-variance").style.color = "rgba(0,0,0,0.2)";
+                document.getElementById("lbl-voice-variance").style.color = "rgba(0,0,0,0.2)";
+            }
+        }
 
 </script>
 
