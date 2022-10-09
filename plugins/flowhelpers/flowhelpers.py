@@ -74,7 +74,7 @@ class LocalSettings:
                 self.email_events = saved_settings["email-events"]
             if u"sms-events" in saved_settings.keys():
                 self.sms_events = saved_settings["sms-events"]
-            if u"mail-events" in saved_settings.keys():
+            if u"voice-events" in saved_settings.keys():
                 self.voice_events = saved_settings["voice-events"]
             if u"email-variance" in saved_settings.keys():
                 try:
@@ -108,6 +108,7 @@ class LocalSettings:
 class WarningNotice:
     #  1: SIP flow sensor is reporting water movement, but all valves should be off
     #  2: SIP has stations on, but sensor is not reporting water movement
+    #  3: Flow variance when compared with prior runs
 
     def __init__(self):
         self.subj_email = ""
@@ -470,35 +471,35 @@ class FlowWindow:
                             open_valves_str = open_valves_str + ","
 
                     logline = (
-                            u'{"'
-                            + u"valves"
-                            + u'":"'
-                            + open_valves
-                            + u'","'
-                            + u'stations'
-                            + u'":"'
-                            + open_valves_str
-                            + u'","'
-                            + "usage"
-                            + u'":'
-                            + str(FlowWindow.usage(self))
-                            + u',"'
-                            + u'measure'
-                            + u'":"'
-                            + self.ls.volume_measure
-                            + u'","'
-                            + u'duration'
-                            + u'":"'
-                            + timestr(FlowWindow.duration(self))
-                            + u'","'
-                            + u'date'
-                            + u'":"'
-                            + self.start_time.strftime(u'%Y-%m-%d')
-                            + '","'
-                            + u'start'
-                            + u'":"'
-                            + self.start_time.strftime(u'%H:%M:%S')
-                            + u'"}'
+                        u'{"'
+                        + u"valves"
+                        + u'":"'
+                        + open_valves
+                        + u'","'
+                        + u'stations'
+                        + u'":"'
+                        + open_valves_str
+                        + u'","'
+                        + "usage"
+                        + u'":'
+                        + str(FlowWindow.usage(self))
+                        + u',"'
+                        + u'measure'
+                        + u'":"'
+                        + self.ls.volume_measure
+                        + u'","'
+                        + u'duration'
+                        + u'":"'
+                        + timestr(FlowWindow.duration(self))
+                        + u'","'
+                        + u'date'
+                        + u'":"'
+                        + self.start_time.strftime(u'%Y-%m-%d')
+                        + '","'
+                        + u'start'
+                        + u'":"'
+                        + self.start_time.strftime(u'%H:%M:%S')
+                        + u'"}'
                     )
                     lines = [logline + u"\n"]
                     log = read_log()
