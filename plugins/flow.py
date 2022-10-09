@@ -91,12 +91,6 @@ def print_settings(lpad=2):
     """
     print(u"{}Master flow sensor address: {}".format(" " * lpad, u"0x%02X" % CLIENT_ADDR))
    
-        
-def update_options():
-    """
-    Read key main program options into local variables
-    """
-    print(gv.sd["mas"])
 
 def changed_valves_loop():
     """
@@ -149,7 +143,6 @@ def changed_valves_loop():
                     fw.end_pulses = capture_flow_counter
                     fw.end_time = capture_time
                     fw.write_log()
-                # print("valves changed: ", changed_valves)
                 fw = fw_new
         
         time.sleep(0.25)
@@ -250,13 +243,9 @@ class settings(ProtectedPage):
                 + str(v["time"])
                 + u'"}'
             )
-            # print("logline", logline)
             rec = json.loads(logline)
             log.append(rec)
 
-        # print('runtime values:', runtime_values)
-        # print("settings", settings)
-        # print("logline", log)
         return template_render.flowsettings(settings, runtime_values, log)  # open flow settings page
 
 
@@ -385,13 +374,11 @@ class flow(ProtectedPage):
                     u"./data/flow.json", u"r"
             ) as f:  # Read settings from json file if it exists
                 settings = json.load(f)
-                print(json.dumps(settings))
         except IOError:  # If file does not exist return empty value
             settings = {}
             # Default settings. can be list, dictionary, etc.
 
         records = flowhelpers.read_log()
-        # print("hello")
         return template_render.flow(settings, runtime_values, records)
 
 
@@ -510,22 +497,9 @@ def notify_new_day(name, **kw):
 new_day = signal(u"new_day")
 new_day.connect(notify_new_day)
 
-# Option settings
-
-def notify_option_change(name, **kw):
-    update_options()
-    #  gv.sd is a dictionary containing the setting that changed.
-    #  See "from options" in gv_reference.txt
-
-
-option_change = signal(u"option_change")
-option_change.connect(notify_option_change)
-
-
 """
 Run when plugin is loaded
 """
-print(u"Flow Settings")
 print_settings()
 ls.load_settings()
 alarm = signal(u"user_notify")
