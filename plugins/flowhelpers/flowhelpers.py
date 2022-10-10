@@ -12,8 +12,8 @@ import datetime
 from blinker import signal
 
 # Variables for flow measurement
-IGNORE_INITIAL = 15  # Time at beginning of flow window to ignore for rate measurement purposes (push air out of system)
-MEASURE_TIME = 30  # Amount of time needed for a flow measurement
+IGNORE_INITIAL = 0  # Time at beginning of flow window to ignore for rate measurement purposes (push air out of system)
+MEASURE_TIME = 10  # Amount of time needed for a flow measurement
 
 """
 **********************************************
@@ -115,13 +115,22 @@ class WarningNotice:
         self.msg_email = ""
         self.msg_sms = ""
         self.msg_voice = ""
-        self.email_alert = signal("email_alert")  # instantiate blinker signal that email program responds to.
+        self.email_alert = signal("email_alert")  # instantiate blinker signal that email plugin responds to.
+        self.sms_alert = signal("sms_alert")  # instantiate blinker signal that sms plugin responds to.
+        self.voice_alert = signal("voice_alert")  # instantiate blinker signal that voice plugin responds to.
 
     def send_notice(self):
         # Send an email
-        self.email_alert.send("SIP flow", subj=self.subj_email, msg=self.msg_email)
-        self.subj_email = ""
-        self.msg_email = ""
+        if len(self.subj_email) > 0 or len(self.msg_email) > 0:
+            self.email_alert.send("SIP flow", subj=self.subj_email, msg=self.msg_email)
+            self.subj_email = ""
+            self.msg_email = ""
+        if len(self.msg_sms) > 0:
+            self.sms_alert.send("SIP flow", msg=self.msg_sms)
+            self.msg_sms = ""
+        if len(self.msg_voice) > 0:
+            self.voice_alert.send("SIP flow", msg=self.msg_voice)
+            self.msg_voice = ""
 
 
 class FlowWindow:
@@ -327,6 +336,7 @@ class FlowWindow:
         flow_ratio = self.wndw_flow_rate / self.ave_flow_rate
         if "3" in self.ls.email_events and flow_ratio >= (
                 1 + self.ls.email_variance) and not self._flow_warning3a_email_given:
+            # Flow rate is higher than prior runs
             print("Flow error 3a (email) encountered")
             measured_rate = round(self.wndw_flow_rate / self.ls.pulses_per_measure, 2)
             last_rate = round(self.ave_flow_rate / self.ls.pulses_per_measure, 2)
@@ -355,13 +365,14 @@ class FlowWindow:
 
         if "3" in self.ls.sms_events and flow_ratio >= (
                 1 + self.ls.sms_variance) and not self._flow_warning3a_sms_given:
+            # Flow rate is higher than prior runs
             print("Flow error 3a (sms) encountered")
             measured_rate = round(self.wndw_flow_rate / self.ls.pulses_per_measure, 2)
             last_rate = round(self.ave_flow_rate / self.ls.pulses_per_measure, 2)
-            text = "SIP {} flow plugin is reporting water flow above the last measured run rate".format(gv.sd["name"])
+            text = "SIP {} flow plugin is reporting water flow above the last measured run rate" .format(gv.sd["name"])
             if len(self._open_valves) == 1:
-                text += " for the station ""{}"".".format(self._open_valves_names[0])
-                text += "A rate of {:,.1f} {}/hr has been detected from the sensor. ".format(measured_rate,
+                text += "for the station ""{}"".".format(self._open_valves_names[0])
+                text += ". A rate of {:,.1f} {}/hr has been detected from the sensor. ".format(measured_rate,
                                                                                              self.ls.volume_measure)
                 text += "This exceeds the last measured rate of {:,.1f} {}/hr ".format(last_rate,
                                                                                             self.ls.volume_measure)
@@ -383,6 +394,7 @@ class FlowWindow:
         flow_ratio = self.wndw_flow_rate / self.ave_flow_rate
         if "3" in self.ls.email_events and flow_ratio <= (
                 1 - self.ls.email_variance) and not self._flow_warning3b_email_given:
+            # Flow rate is slower than prior runs
             print("Flow error 3b (email) encountered")
             measured_rate = round(self.wndw_flow_rate / self.ls.pulses_per_measure, 1)
             last_rate = round(self.ave_flow_rate / self.ls.pulses_per_measure, 1)
@@ -409,15 +421,16 @@ class FlowWindow:
             self._warning_notice.send_notice()
             self._flow_warning3b_email_given = True
 
-        if "3" in self.ls.sms_events and flow_ratio <= (
+        if "3" in self.ls.sms_events and self.wndw_flow_rate > 0 and flow_ratio <= (
                 1 - self.ls.sms_variance) and not self._flow_warning3b_sms_given:
+            # Flow rate is slower than prior runs
             print("Flow error 3b (sms) encountered")
             measured_rate = round(self.wndw_flow_rate / self.ls.pulses_per_measure, 1)
             last_rate = round(self.ave_flow_rate / self.ls.pulses_per_measure, 1)
             text = "SIP {} flow plugin is reporting water flow below the last measured run rate".format(gv.sd["name"])
             if len(self._open_valves) == 1:
                 text += " for the station ""{}"".".format(self._open_valves_names[0])
-                text += "A rate of {:,.1f} {}/hr has been detected from the sensor. ".format(measured_rate,
+                text += ". A rate of {:,.1f} {}/hr has been detected from the sensor. ".format(measured_rate,
                                                                                              self.ls.volume_measure)
                 text += "This is less than the last measured rate of {:,.1f} {}/hr ".format(last_rate,
                                                                                             self.ls.volume_measure)
@@ -430,9 +443,9 @@ class FlowWindow:
                 text += "by {:,.1f}% ".format((1 - round(measured_rate / last_rate, 3)) * 100)
                 text += "for the following active stations: {}.".format(self.valves_status_str)
 
-                self._warning_notice.msg_sms = text
-                self._warning_notice.send_notice()
-                self._flow_warning3b_sms_given = True
+            self._warning_notice.msg_sms = text
+            self._warning_notice.send_notice()
+            self._flow_warning3b_sms_given = True
 
     def usage(self):
         # Returns water usage in current flow window

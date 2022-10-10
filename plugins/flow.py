@@ -486,6 +486,11 @@ def notify_new_day(name, **kw):
         fw.start_pulses = all_pulses
         plugin_initiated = True
 
+        # Ask notification plugins to check in
+        # Enabled notification plugins will respond with a "notification_online" message
+        notification_query = signal("notification_checkin")
+        notification_query.send(u"Flow.py", txt=u"")
+
     if not flow_loop_running:
         # This loop watches the flow
         flow_loop.start()
@@ -496,6 +501,20 @@ def notify_new_day(name, **kw):
 
 new_day = signal(u"new_day")
 new_day.connect(notify_new_day)
+
+def notify_notification_presence(name, **kw):
+    """
+    Responds to messages from notification plugins advertising their presence
+    """
+    global sms_loaded
+    if kw["txt"] == "sms":
+        sms_loaded = True
+        print("Flow plugin is sending sms messages to {}".format(name))
+
+
+notification_presence = signal(u"notification_presence")
+notification_presence.connect(notify_notification_presence)
+
 
 """
 Run when plugin is loaded
