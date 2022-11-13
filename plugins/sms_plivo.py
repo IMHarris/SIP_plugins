@@ -14,8 +14,6 @@ from __future__ import print_function
 
 # standard library imports
 import json  # for working with data file
-from threading import Thread
-from time import sleep
 
 # local module imports
 from blinker import signal
@@ -25,20 +23,23 @@ from urls import urls  # Get access to SIP's URLs
 import web  # web.py framework
 from webpages import ProtectedPage  # Needed for security
 
+SMS_ENABLED = True
+VOICE_ENABLED = True
+
+sms_numbers = ""
+voice_numbers = ""
+
 # Add new URLs to access classes in this plugin.
 urls.extend([
     u"/sms-plivo-sp", u"plugins.sms_plivo.settings",
-    u"/sms-plivo-save", u"plugins.sms_plivo.save_settings"
+    u"/sms-plivo-save", u"plugins.sms_plivo.save_settings",
+    u"/sms-plivo-test", u"plugins.sms_plivo.Test"
 
 ])
 
 # Add this plugin to the PLUGINS menu ["Menu Name", "URL"], (Optional)
 gv.plugin_menu.append([_(u"SMS Plivo Plugin"), u"/sms-plivo-sp"])
 
-
-# ft = Thread(target=data_test)
-# ft.daemon = True
-# ft.start()
 """
 Event Triggers
 """
@@ -47,39 +48,46 @@ Event Triggers
 def advertise_presence(name, **kw):
     """
     Respond to query looking for notification plugins
-    When a "notify_checkin" message is received, this plugin will advertise its ability
+    When a "notification_checkin" message is received, this plugin will advertise its ability
     to accept sms and voice notifications by responding with a "notification presence" message.
     """
     notification_presence = signal("notification_presence")
-    notification_presence.send(u"Plivo", txt=u"sms")
-    notification_presence.send(u"Plivo", txt=u"voice")
+
+    # Notify that plivo_sms is listening for sms messages
+    if SMS_ENABLED:
+        notification_presence.send(u"Plivo", txt=u"sms")
+
+    # Notify that plivo_sms is listening for voice messages
+    if VOICE_ENABLED:
+        notification_presence.send(u"Plivo", txt=u"voice")
 
 
 notification_checkin = signal(u"notification_checkin")
 notification_checkin.connect(advertise_presence)
 
 
-def receive_sms(name, **kw):
+def send_sms(name, **kw):
     """
-    Receive SMS message.  Send to SMS provider
+    Send message to SMS provider
     """
     print(u"SMS message received from {}: {}".format(name, kw[u"msg"]))
-    sms.send_message(+18479519366, kw[u"msg"])
+    sms.send_message(save_settings.sms_numbers, kw[u"msg"])
 
 
-receive_sms_message = signal(u"sms_alert")
-receive_sms_message.connect(receive_sms)
+sms_alert = signal(u"sms_alert")
+sms_alert.connect(send_sms)
 
 
-def receive_voice(name, **kw):
+def send_voice(name, **kw):
     """
-    Receive voice message.  Send to voice provider
+    Send message to voice provider
     """
     print(u"Voice message received from {}: {}".format(name, kw[u"msg"]))
+    voice.send_message(save_settings.voice_numbers, kw[u"msg"])
 
 
-receive_voice_message = signal(u"voice_alert")
-receive_voice_message.connect(receive_voice)
+voice_alert = signal(u"voice_alert")
+voice_alert.connect(send_voice)
 
 
 class settings(ProtectedPage):
@@ -95,7 +103,13 @@ class settings(ProtectedPage):
                 settings = json.load(f)
         except IOError:  # If file does not exist return empty value
             settings = {}  # Default settings. can be list, dictionary, etc.
-        return template_render.sms_plivo(settings)  # open settings page
+
+        runtime_values = {
+            'sms-enabled': SMS_ENABLED,
+            'voice-enabled': VOICE_ENABLED,
+        }
+
+        return template_render.sms_plivo(settings, runtime_values)  # open settings page
 
 
 class save_settings(ProtectedPage):
@@ -104,12 +118,19 @@ class save_settings(ProtectedPage):
     Will create or update file when SUBMIT button is clicked
     CheckBoxes only appear in qdict if they are checked.
     """
+    sms_numbers = ""
+    voice_numbers = ""
 
     def GET(self):
         qdict = (
             web.input()
         )  # Dictionary of values returned as query string from settings page.
-        #        print qdict  # for testing
+
+        # Save the phone numbers to local variables and reformat for plivo
+        if "text-sms" in qdict.keys():
+            save_settings.sms_numbers = qdict["text-sms"].replace(",", "<")
+        if "text-voice" in qdict.keys():
+            save_settings.voice_numbers = qdict["text-voice"].replace(",", "p")
         with open(u"./data/sms_plivo.json", u"w") as f:  # Edit: change name of json file
             json.dump(qdict, f)  # save to file
         raise web.seeother(u"/")  # Return user to home page.
@@ -133,7 +154,16 @@ PLIVO_VERSION = "v1"
 KEY_DATA = u"./data/plivo_keys.json"
 
 
+class Test(ProtectedPage):
+    def GET(self):
+        qdict = (
+            web.input()
+        )  # Dictionary of values returned as query string .
+        print("hi", qdict)
+
+
 class PlivoKeys(object):
+    # Loads the authentication keys from the KEY_DATA file
     def __init__(self, _keyfile):
         self.key_file = _keyfile
         self._auth_keys = {}
@@ -221,7 +251,6 @@ class SMSAPI(object):
                 'src': self.src,  # Sender's phone number with country code
                 'dst': phone,  # Receiver's phone Number with country code
                 'text': text_message,  # Your SMS Text Message - English
-                #   'url' : "http://example.com/report/", # The URL to which with the status of the message is sent
                 'method': 'POST'  # The method used to call the url
             }
 
@@ -246,6 +275,7 @@ class VoiceAPI(object):
         self.auth_id = plivokeys.auth_id()
         self.auth_token = plivokeys.auth_token()
         self.auth_phlo = plivokeys.auth_phlo()
+        self.src = plivokeys.src()
         self._api = 'account/%s/phlo/%s' % (self.auth_id, self.auth_phlo)
         self.headers = {'User-Agent': 'PythonPlivo'}
 
@@ -283,36 +313,29 @@ class VoiceAPI(object):
 
         return content
 
-    def send_message(self, params=None):
-        if not params: params = {}
-        return self._request('POST', '/Message/', data=params)
+    def send_message(self, phone, voicemessage,params=None):
 
+        try:
+            params = {
+                'from': self.src,  # Sender's phone number with country code
+                'to': phone,  # Receiver's phone Number with country code
+                'items': voicemessage,  # Your SMS Text Message - English
+            }
 
-# def sendSMS(textmessage, phone):
-#     try:
-#         p = plivosms2.RestAPI()
-#
-#         params = {
-#             'src': '+12242284700',  # Sender's phone number with country code
-#             'dst': phone,  # Receiver's phone Number with country code
-#             'text': textmessage,  # Your SMS Text Message - English
-#             #   'url' : "http://example.com/report/", # The URL to which with the status of the message is sent
-#             'method': 'POST'  # The method used to call the url
-#         }
-#
-#         print('Sending SMS msg: ', textmessage)
-#         response = p.send_message(params)
-#         # print('Text message submitted.  Response: ', str(response))
-#
-#     except Exception as inst:
-#         print('Unable to send SMS message')
-#         print(type(inst))  # the exception instance
-#         print(inst.args)  # arguments stored in .args
-#         print(inst)
+            print('Plivo sending SMS msg: ', voicemessage)
+            response = self._request('POST', '/Message/', data=params)
+
+            # Prints the complete response
+            print('Voice message submitted.  Response: ', str(response))
+            return response
+
+        except Exception as inst:
+            print('Unable to send voice message')
+            print(type(inst))  # the exception instance
+            print(inst.args)  # arguments stored in .args
+            print(inst)
 
 
 plivo_keys = PlivoKeys(KEY_DATA)
 sms = SMSAPI(plivo_keys)
-# voice = VoiceAPI(plivo_keys)
-
-# sms.send_message(+18479519366, "Hello World from SIP plugin")
+voice = VoiceAPI(plivo_keys)
