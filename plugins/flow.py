@@ -507,9 +507,13 @@ def notify_notification_presence(name, **kw):
     Responds to messages from notification plugins advertising their presence
     """
     global sms_loaded
+    global voice_loaded
     if kw["txt"] == "sms":
         sms_loaded = True
         print("Flow plugin is sending sms messages to {}".format(name))
+    if kw["txt"] == "voice":
+        voice_loaded = True
+        print("Flow plugin is sending voice messages to {}".format(name))
 
 
 notification_presence = signal(u"notification_presence")

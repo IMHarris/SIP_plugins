@@ -262,13 +262,11 @@ class FlowWindow:
         delta = current_time - self.start_time
         duration = delta.total_seconds()
 
-        if "2" in self.ls.email_events and not self._flow_warning2_given:
-            #  Water is flowing and it shouldn't be
-            if duration > 3 and not self.valve_open() and rate > 3:
-                # Water is flowing but the valves show as off. Send error message.
-                print("Flow error 2 encountered")
-                self._execute_notification_2(rate)
-                self._flow_warning2_given = True
+        if not self._flow_warning2_given and duration > 3 and not self.valve_open() and rate > 3:
+            # Water is flowing but the valves show as off. Send error message.
+            print("Flow error 2 encountered")
+            self._execute_notification_2(rate)
+            self._flow_warning1_given = True
 
         # Track and save valve flow rate if only a single valve is open
         if not self._flow_tracking_started:
@@ -286,7 +284,7 @@ class FlowWindow:
             self._flow_rate_read_time = current_time
 
             # Evaluate flow error conditions
-            if "1" in self.ls.email_events and not self._flow_warning1_given and self.valve_open() and self.wndw_flow_rate == 0:
+            if not self._flow_warning1_given and self.valve_open() and self.wndw_flow_rate == 0:
                 # Water should be flowing, but it does not appear to be.
                 print("Flow error 1 encountered:", self.valves_status_str())
                 self._execute_notification_1()
@@ -312,9 +310,12 @@ class FlowWindow:
             text = "SIP {} flow plugin is reporting that {} stations should be active, ".format(gv.sd["name"],
                                                                                                 self.valves_status_str())
         text += "but the flow sensor is not detecting any water flow."
-        self._warning_notice.msg_email = text
-        self._warning_notice.msg_sms = text
-        self._warning_notice.msg_voice = text
+        if "1" in self.ls.email_events:
+            self._warning_notice.msg_email = text
+        if "1" in self.ls.sms_events:
+            self._warning_notice.msg_sms = text
+        if "1" in self.ls.voice_events:
+            self._warning_notice.msg_voice = text
         self._warning_notice.send_notice()
 
     def _execute_notification_2(self, rate):
@@ -326,9 +327,12 @@ class FlowWindow:
             gv.sd["name"])
         text += "rate of {:,.1f} {} per hour has been detected from the sensor.".format(flow_rate,
                                                                                         self.ls.volume_measure)
-        self._warning_notice.msg_email = text
-        self._warning_notice.msg_sms = text
-        self._warning_notice.msg_voice = text
+        if "2" in self.ls.email_events:
+            self._warning_notice.msg_email = text
+        if "2" in self.ls.sms_events:
+            self._warning_notice.msg_sms = text
+        if "2" in self.ls.voice_events:
+            self._warning_notice.msg_voice = text
         self._warning_notice.send_notice()
 
     def _check_notification_3a(self, rate):
@@ -389,10 +393,36 @@ class FlowWindow:
             self._warning_notice.send_notice()
             self._flow_warning3a_sms_given = True
 
+        if "3" in self.ls.voice_events and flow_ratio >= (
+                1 + self.ls.voice_variance) and not self._flow_warning3a_voice_given:
+            # Flow rate is higher than prior runs
+            print("Flow error 3a (voice) encountered")
+            measured_rate = round(self.wndw_flow_rate / self.ls.pulses_per_measure, 2)
+            last_rate = round(self.ave_flow_rate / self.ls.pulses_per_measure, 2)
+            text = "SIP {} flow plugin is reporting water flow above the last measured run rate" .format(gv.sd["name"])
+            if len(self._open_valves) == 1:
+                text += "for the station ""{}"".".format(self._open_valves_names[0])
+                text += ". A rate of {:,.1f} {}/hr has been detected from the sensor. ".format(measured_rate,
+                                                                                             self.ls.volume_measure)
+                text += "This exceeds the last measured rate of {:,.1f} {}/hr ".format(last_rate,
+                                                                                            self.ls.volume_measure)
+                text += "by {:,.1f}%.\n".format((1 - round(measured_rate / last_rate, 3)) * 100)
+            else:
+                text += ". A rate of {:,.1f} {}/hr has been detected from the sensor. ".format(measured_rate,
+                                                                                               self.ls.volume_measure)
+                text += "This exceeds the last measured rate of {:,.1f} {}/hr ".format(last_rate,
+                                                                                            self.ls.volume_measure)
+                text += "by {:,.1f}% ".format((round(measured_rate / last_rate, 1) - 1) * 100)
+                text += "for the following active stations: {}.".format(self.valves_status_str)
+
+            self._warning_notice.msg_voice = text
+            self._warning_notice.send_notice()
+            self._flow_warning3a_voice_given = True
+
     def _check_notification_3b(self, rate):
         #  Current flow rate is less than historical rate
         flow_ratio = self.wndw_flow_rate / self.ave_flow_rate
-        if "3" in self.ls.email_events and flow_ratio <= (
+        if "3" in self.ls.email_events and self.wndw_flow_rate > 0 and flow_ratio <= (
                 1 - self.ls.email_variance) and not self._flow_warning3b_email_given:
             # Flow rate is slower than prior runs
             print("Flow error 3b (email) encountered")
@@ -446,6 +476,32 @@ class FlowWindow:
             self._warning_notice.msg_sms = text
             self._warning_notice.send_notice()
             self._flow_warning3b_sms_given = True
+
+        if "3" in self.ls.voice_events and self.wndw_flow_rate > 0 and flow_ratio <= (
+                1 - self.ls.voice_variance) and not self._flow_warning3b_voice_given:
+            # Flow rate is slower than prior runs
+            print("Flow error 3b (voice) encountered")
+            measured_rate = round(self.wndw_flow_rate / self.ls.pulses_per_measure, 1)
+            last_rate = round(self.ave_flow_rate / self.ls.pulses_per_measure, 1)
+            text = "SIP {} flow plugin is reporting water flow below the last measured run rate".format(gv.sd["name"])
+            if len(self._open_valves) == 1:
+                text += " for the station ""{}"".".format(self._open_valves_names[0])
+                text += ". A rate of {:,.1f} {}/hr has been detected from the sensor. ".format(measured_rate,
+                                                                                             self.ls.volume_measure)
+                text += "This is less than the last measured rate of {:,.1f} {}/hr ".format(last_rate,
+                                                                                            self.ls.volume_measure)
+                text += "by {:,.1f}%.\n".format((1 - round(measured_rate / last_rate, 3)) * 100)
+            else:
+                text += ". A rate of {:,.1f} {}/hr has been detected from the sensor. ".format(measured_rate,
+                                                                                             self.ls.volume_measure)
+                text += "This is less than the last measured rate of {:,.1f} {}/hr ".format(last_rate,
+                                                                                            self.ls.volume_measure)
+                text += "by {:,.1f}% ".format((1 - round(measured_rate / last_rate, 3)) * 100)
+                text += "for the following active stations: {}.".format(self.valves_status_str)
+
+            self._warning_notice.msg_voice = text
+            self._warning_notice.send_notice()
+            self._flow_warning3b_voice_given = True
 
     def usage(self):
         # Returns water usage in current flow window

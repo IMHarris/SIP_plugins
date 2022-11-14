@@ -54,9 +54,6 @@ $var page: proto_plugin  <!--Edit: page name, used internally-->
         <p>Phone Numbers</p>  <!--Edit-->
         <table class="optionList">
 
-            <thead>
-
-            </thead>
             $if runtime_values["sms-enabled"]:
                 <tr>
                     <td style='text-transform: none;'><div id="lbl-sms">SMS:</div></td>
@@ -69,7 +66,12 @@ $var page: proto_plugin  <!--Edit: page name, used internally-->
                     <td><input type="text" name="text-voice" id="text-voice" value="${settings['text-voice'] if 'text-voice' in settings else ''}"></td>
                     <td> <button type="button" id="btn-test-voice">Test</button></td>
                 </tr>
-
+            <tr>
+                <td style='...'><div id="lbl-status">Status:</div></td>
+                <td colspan="2">
+                    <textarea id="text-status"  style="font-family: monospace;" rows="2" cols="35" readonly></textarea>
+                </td>
+            </tr>
         </table>
         format +15555555555,+15555555555
 
@@ -85,6 +87,13 @@ $var page: proto_plugin  <!--Edit: page name, used internally-->
     var request = new XMLHttpRequest();
     var href = window.location.href;
     var apiURL = href.substr(0, href.lastIndexOf("/") + 1) + "sms-plivo-test";
+
+    request.onreadystatechange = function() {
+        //function called when XHR data is loaded
+        if (this.readyState == 4 && this.status == 200) {
+            document.getElementById("text-status").textContent = this.responseText;
+        }
+    }
     $if runtime_values["sms-enabled"]:
         document.getElementById("check-sms").addEventListener("change", fnSMSEnabledChange);
         document.getElementById("btn-test-sms").addEventListener("click", fnTestSMS);
@@ -108,30 +117,38 @@ $var page: proto_plugin  <!--Edit: page name, used internally-->
                     document.getElementById("text-sms").style.color = "rgba(" + rgbaTxtVariance + ")";
                     document.getElementById("lbl-sms").style.color = "rgba(" + rgbaLblVariance + ")";
                     document.getElementById("btn-test-sms").disabled = false;
+                    document.getElementById("lbl-status").style.color = "rgba(" + rgbaLblVariance + ")";
+                    document.getElementById("text-status").disabled = false;
                 } else {
                     document.getElementById("text-sms").disabled = true;
                     document.getElementById("text-sms").style.color = "rgba(0,0,0,0.2)";
                     document.getElementById("lbl-sms").style.color = "rgba(0,0,0,0.2)";
                     document.getElementById("btn-test-sms").disabled = true;
+                    if (document.getElementById("check-voice")) {
+                        if (document.getElementById("check-voice").checked) {
+                            document.getElementById("lbl-status").style.color = "rgba(" + rgbaLblVariance + ")";
+                            document.getElementById("text-status").disabled = false;
+                        } else {
+                            document.getElementById("lbl-status").style.color = "rgba(0,0,0,0.2)";
+                            document.getElementById("text-status").disabled = true;
+                        }
+                    } else {
+                        document.getElementById("lbl-status").style.color = "rgba(0,0,0,0.2)";
+                        document.getElementById("text-status").disabled = true;
+                    }
                 }
             }
 
             function fnTestSMS() {
                 // send an SMS test message
-                request.open('GET', apiURL, true);
-                request.send("Hello World");
-            }
-
-            request.onreadystatechange = function() {
-                //function called when XHR data is loaded
-                if (this.readyState == 4 && this.status == 200) {
-                    var msg_response = JSON.parse(this.responseText);
-                    alert(msg_response);
-                }
+                document.getElementById("text-status").textContent = "Waiting for response..."
+                request.open('POST', apiURL, true);
+                request.send('{"type":"SMS"}');
             }
 
     $if runtime_values["voice-enabled"]:
         document.getElementById("check-voice").addEventListener("change", fnVoiceEnabledChange);
+        document.getElementById("btn-test-voice").addEventListener("click", fnTestVoice);
         txtVariance = getComputedStyle(document.getElementById("text-voice")).getPropertyValue("color");
         rgbaTxtVariance = txtVariance.match(/[\d.]+/g);
         // If alpha is not there, add it:
@@ -152,11 +169,31 @@ $var page: proto_plugin  <!--Edit: page name, used internally-->
                 document.getElementById("text-voice").style.color = "rgba(" + rgbaTxtVariance + ")";
                 document.getElementById("lbl-voice").style.color = "rgba(" + rgbaLblVariance + ")";
                 document.getElementById("btn-test-voice").disabled = false;
+                document.getElementById("lbl-status").style.color = "rgba(" + rgbaLblVariance + ")";
+                document.getElementById("text-status").disabled = false;
             } else {
                 document.getElementById("text-voice").disabled = true;
                 document.getElementById("text-voice").style.color = "rgba(0,0,0,0.2)";
                 document.getElementById("lbl-voice").style.color = "rgba(0,0,0,0.2)";
                 document.getElementById("btn-test-voice").disabled = true;
+                if (document.getElementById("check-sms")) {
+                    if (document.getElementById("check-sms").checked) {
+                        document.getElementById("lbl-status").style.color = "rgba(" + rgbaTxtVariance + ")";
+                        document.getElementById("text-status").disabled = false;
+                    } else {
+                        document.getElementById("lbl-status").style.color = "rgba(0,0,0,0.2)";
+                        document.getElementById("text-status").disabled = true;
+                    }
+                } else {
+                    document.getElementById("lbl-status").style.color = "rgba(0,0,0,0.2)";
+                    document.getElementById("text-status").disabled = true;
+                }
             }
+        }
+        function fnTestVoice() {
+            // send an SMS test message
+            document.getElementById("text-status").textContent = "Waiting for response..."
+            request.open('POST', apiURL, true);
+            request.send('{"type":"Voice"}');
         }
 </script>
