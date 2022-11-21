@@ -176,8 +176,8 @@ if "text-voice" in loaded_settings.keys():
 # *********************************************************
 #
 #  Everything from here down is Plivo Specific
-#  Plivo keys are stored in a configuration file and not exposed via settings
-#  to reduce the risk of the info being disclosed to the public internet
+#  Plivo keys are stored in a configuration file and not exposed via settings.
+#  This is by design to reduce the risk of the info being disclosed to the public internet
 #
 # *********************************************************
 
@@ -238,28 +238,13 @@ class SMSAPI(object):
         self._api = self.url + '/Account/%s' % self.auth_id
         self.headers = {'User-Agent': 'PythonPlivo'}
 
-    def _request(self, method, path, data={}):
+    def _request(self, path, data={}):
         path = path.rstrip('/') + '/'
-        if method == 'POST':
-            headers = {'content-type': 'application/json'}
-            headers.update(self.headers)
-            r = requests.post(self._api + path, headers=headers,
-                              auth=(self.auth_id, self.auth_token),
-                              data=json.dumps(data))
-        elif method == 'GET':
-            r = requests.get(self._api + path, headers=self.headers,
-                             auth=(self.auth_id, self.auth_token),
-                             params=data)
-        elif method == 'DELETE':
-            r = requests.delete(self._api + path, headers=self.headers,
-                                auth=(self.auth_id, self.auth_token),
-                                params=data)
-        elif method == 'PUT':
-            headers = {'content-type': 'application/json'}
-            headers.update(self.headers)
-            r = requests.put(self._api + path, headers=headers,
-                             auth=(self.auth_id, self.auth_token),
-                             data=json.dumps(data))
+        headers = {'content-type': 'application/json'}
+        headers.update(self.headers)
+        r = requests.post(self._api + path, headers=headers,
+                          auth=(self.auth_id, self.auth_token),
+                          data=json.dumps(data))
         content = r.content
         if content:
             try:
@@ -269,7 +254,7 @@ class SMSAPI(object):
         else:
             response = content
 
-        return content
+        return response
 
     def send_message(self, phone, text_message):
         try:
@@ -279,7 +264,7 @@ class SMSAPI(object):
                 'text': text_message,  # Your SMS Text Message - English
                 'method': 'POST'  # The method used to call the url
             }
-            response = self._request('POST', '/Message/', data=params)
+            response = self._request('/Message/', data=params)
             return response
 
         except Exception as inst:
@@ -302,29 +287,12 @@ class VoiceAPI(object):
         self._api = 'account/%s/phlo/%s' % (self.auth_id, self.auth_phlo)
         self.headers = {'User-Agent': 'PythonPlivo'}
 
-    def _request(self, method, path, data={}):
-        path = path.rstrip('/') + '/'
-        if method == 'POST':
-            headers = {'content-type': 'application/json'}
-            headers.update(self.headers)
-            r = requests.post(self.url + self._api, headers=headers,
-                              auth=(self.auth_id, self.auth_token),
-                              data=json.dumps(data))
-
-        elif method == 'GET':
-            r = requests.get(self._api + path, headers=self.headers,
-                             auth=(self.auth_id, self.auth_token),
-                             params=data)
-        elif method == 'DELETE':
-            r = requests.delete(self._api + path, headers=self.headers,
-                                auth=(self.auth_id, self.auth_token),
-                                params=data)
-        elif method == 'PUT':
-            headers = {'content-type': 'application/json'}
-            headers.update(self.headers)
-            r = requests.put(self._api, headers=headers,
-                             auth=(self.auth_id, self.auth_token),
-                             data=json.dumps(data))
+    def _request(self, data={}):
+        headers = {'content-type': 'application/json'}
+        headers.update(self.headers)
+        r = requests.post(self.url + self._api, headers=headers,
+                          auth=(self.auth_id, self.auth_token),
+                          data=json.dumps(data))
 
         content = r.content
         if content:
@@ -334,7 +302,7 @@ class VoiceAPI(object):
                 response = content
         else:
             response = content
-        return content
+        return response
 
     def send_message(self, phone, voice_message):
 
@@ -344,7 +312,7 @@ class VoiceAPI(object):
                 'to': phone,  # Receiver's phone Number with country code
                 'items': voice_message,  # Your SMS Text Message - English
             }
-            response = self._request('POST', '/Message/', data=params)
+            response = self._request(data=params)
             return response
 
         except Exception as inst:

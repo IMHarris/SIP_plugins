@@ -44,7 +44,9 @@ valve_messages = queue.Queue()  # Carries messages from notify_zone_change to th
 # Variables to note if notification plugins are loaded
 email_loaded = False
 sms_loaded = False
+sms_plugin = ""
 voice_loaded = False
+voice_plugin = ""
 
 # Variables for the flow controller client
 CLIENT_ADDR = 0x44
@@ -207,12 +209,16 @@ class settings(ProtectedPage):
                 runtime_values.update({"email-loaded": "no"})
             if sms_loaded:
                 runtime_values.update({"sms-loaded": "yes"})
+                runtime_values.update({"sms-plugin": sms_plugin})
             else:
                 runtime_values.update({"sms-loaded": "no"})
+                runtime_values.update({"sms-plugin": ""})
             if voice_loaded:
                 runtime_values.update({"voice-loaded": "yes"})
+                runtime_values.update({"voice-plugin": voice_plugin})
             else:
                 runtime_values.update({"voice-loaded": "no"})
+                runtime_values.update({"voice-plugin": ""})
             runtime_values.update({"valve-measure-time": str(flowhelpers.IGNORE_INITIAL + flowhelpers.MEASURE_TIME)})
 
             with open(
@@ -508,12 +514,22 @@ def notify_notification_presence(name, **kw):
     """
     global sms_loaded
     global voice_loaded
+    global sms_plugin
+    global voice_plugin
     if kw["txt"] == "sms":
         sms_loaded = True
-        print("Flow plugin is sending sms messages to {}".format(name))
+        if len(name) > 0:
+            sms_plugin = name
+        else:
+            sms_plugin = "?"
+        print("Flow plugin is sending sms messages to {}".format(sms_plugin))
     if kw["txt"] == "voice":
         voice_loaded = True
-        print("Flow plugin is sending voice messages to {}".format(name))
+        if len(name) > 0:
+            voice_plugin = name
+        else:
+            voice_plugin = "?"
+        print("Flow plugin is sending voice messages to {}".format(voice_plugin))
 
 
 notification_presence = signal(u"notification_presence")
