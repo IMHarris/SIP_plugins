@@ -71,7 +71,11 @@ def send_sms(name, **kw):
     Send message to SMS provider
     """
     print(u"SMS message request received from {}: {}".format(name, kw[u"msg"]))
-    response = sms.send_message(save_settings.sms_numbers, kw[u"msg"])
+    if "dest" in kw.keys():
+        phone = kw["dest"]
+    else:
+        phone = save_settings.voice_numbers
+    response = sms.send_message(phone, kw[u"msg"])
     return response
 
 
@@ -84,7 +88,11 @@ def send_voice(name, **kw):
     Send message to voice provider
     """
     print(u"Voice message request received from {}: {}".format(name, kw[u"msg"]))
-    response = voice.send_message(save_settings.voice_numbers, kw[u"msg"])
+    if "dest" in kw.keys():
+        phone = kw["dest"]
+    else:
+        phone = save_settings.voice_numbers
+    response = voice.send_message(phone, kw[u"msg"])
     print("voice response", response)
     return response
 
@@ -135,9 +143,11 @@ class save_settings(ProtectedPage):
 
         # Save the phone numbers to local variables and reformat for plivo
         if "text-sms" in qdict.keys():
-            save_settings.sms_numbers = qdict["text-sms"].replace(",", "<")
+            save_settings.sms_numbers = qdict["text-sms"].replace(" ", "")
+            qdict["text-sms"] = save_settings.sms_numbers
         if "text-voice" in qdict.keys():
-            save_settings.voice_numbers = qdict["text-voice"].replace(",", "p")
+            save_settings.voice_numbers = qdict["text-voice"].replace(" ", "")
+            qdict["text-voice"] = save_settings.voice_numbers
         with open(u"./data/sms_plivo.json", u"w") as f:  # Edit: change name of json file
             json.dump(qdict, f)  # save to file
         raise web.seeother(u"/")  # Return user to home page.
@@ -150,12 +160,17 @@ class Test(ProtectedPage):
         qdict = (
             json.loads(str(web.data(), "utf-8"))
         )  # Dictionary of values returned as query string .
+        # print(str(web.data().decode('utf8').replace("'", '"')))
+        # qdict = json.loads(web.data().decode('utf8').replace("'", '"'))
         if "type" in qdict.keys():
             if qdict["type"] == "SMS":
-                response = send_sms(BROADCAST_NAME, msg="This is a {} SMS test message from {}.".format(BROADCAST_NAME, gv.sd["name"]))
+                response = (
+                    send_sms(BROADCAST_NAME,
+                             msg="This is a {} SMS test message from {}.".format(BROADCAST_NAME, gv.sd["name"]),
+                             dest=qdict["dest"])
+                )
             if qdict["type"] == "Voice":
                 response = send_voice(BROADCAST_NAME, msg="This is a {} voice test message from {}.".format(BROADCAST_NAME, gv.sd["name"]))
-
             web.header(u"Content-Type", u"text/csv")
             return response
 
@@ -258,6 +273,7 @@ class SMSAPI(object):
 
     def send_message(self, phone, text_message):
         try:
+            phone = phone.replace(",", "<")
             params = {
                 'src': self.src,  # Sender's phone number with country code
                 'dst': phone,  # Receiver's phone Number with country code
@@ -307,6 +323,7 @@ class VoiceAPI(object):
     def send_message(self, phone, voice_message):
 
         try:
+            phone = phone.replace(",", "<")
             params = {
                 'from': self.src,  # Sender's phone number with country code
                 'to': phone,  # Receiver's phone Number with country code
