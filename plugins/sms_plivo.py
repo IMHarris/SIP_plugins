@@ -170,7 +170,11 @@ class Test(ProtectedPage):
                              dest=qdict["dest"])
                 )
             if qdict["type"] == "Voice":
-                response = send_voice(BROADCAST_NAME, msg="This is a {} voice test message from {}.".format(BROADCAST_NAME, gv.sd["name"]))
+                response = (
+                    send_voice(BROADCAST_NAME,
+                             msg="This is a {} voice test message from {}.".format(BROADCAST_NAME, gv.sd["name"]),
+                             dest=qdict["dest"])
+                )
             web.header(u"Content-Type", u"text/csv")
             return response
 

@@ -12,8 +12,8 @@ import datetime
 from blinker import signal
 
 # Variables for flow measurement
-IGNORE_INITIAL = 0  # Time at beginning of flow window to ignore for rate measurement purposes (push air out of system)
-MEASURE_TIME = 10  # Amount of time needed for a flow measurement
+IGNORE_INITIAL = 15  # Time at beginning of flow window to ignore for rate measurement purposes (push air out of system)
+MEASURE_TIME = 30  # Amount of time needed for a flow measurement
 
 """
 **********************************************
