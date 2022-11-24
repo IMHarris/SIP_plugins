@@ -495,7 +495,7 @@ def notify_new_day(name, **kw):
         # Ask notification plugins to check in
         # Enabled notification plugins will respond with a "notification_online" message
         notification_query = signal("notification_checkin")
-        notification_query.send(u"Flow.py", txt=u"")
+        notification_query.send(u"Flow.py")
 
     if not flow_loop_running:
         # This loop watches the flow
