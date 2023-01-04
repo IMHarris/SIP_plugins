@@ -26,6 +26,7 @@ valve_loop_running = False
 valve_message_received = False
 prior_valve_state = []
 settings_b4 = {}
+homebridge_loop_running = False
 
 # Variables for the flow controller client
 
@@ -34,9 +35,8 @@ settings_b4 = {}
 # Add new URLs to access classes in this plugin.
 # fmt: off
 urls.extend([
-    u"/homebridge-sp", u"plugins.homebridge.homebridge",
+    u"/homebridge-sp", u"plugins.homebridge.settings",
     u"/homebridge-save", u"plugins.homebridge.save_settings",
-    u"/homebridge-settings", u"plugins.flow.settings",
 ])
 
 # Add this plugin to the PLUGINS menu ["Menu Name", "URL"], (Optional)
@@ -133,6 +133,10 @@ class save_settings(ProtectedPage):
         raise web.seeother(u"/")  # Return user to home page.
 
 
+def on_message(client, msg):
+    "Callback when MQTT message is received."
+    print('mqtt message received:', msg)
+
 class LoopThread(threading.Thread):
     def __init__(self, fn, thread_id, name, counter):
         threading.Thread.__init__(self)
@@ -154,7 +158,7 @@ def main_loop():
     """
     global homebridge_loop_running
     homebridge_loop_running = True
-    print(u"Flow plugin main loop initiated.")
+    print(u"Homebridge plugin main loop initiated.")
     start_time = datetime.datetime.now()
 
     while True:
@@ -164,6 +168,8 @@ def main_loop():
 
 homebridge_loop = LoopThread(main_loop, 1, "HomebridgeLoop", 1)
 valve_loop = LoopThread(changed_valves_loop, 2, "ValveLoop", 2)
+
+print("made it here")
 
 
 class ValveNotice:
@@ -218,3 +224,13 @@ new_day.connect(notify_new_day)
 Run when plugin is loaded
 """
 
+
+def subscribe():
+    "Subscribe to messages"
+    topic = "$SYS/#"
+    if topic:
+        mqtt.subscribe(topic, on_message, 2)
+        print('subscribed to sys messages')
+
+
+subscribe()
