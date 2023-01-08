@@ -18,12 +18,12 @@ from urls import urls  # Get access to SIP's URLs
 import web  # web.py framework
 from webpages import ProtectedPage, WebPage  # Needed for security
 
-# from webpages import showOnTimeline  # Enable plugin to display station data on timeline
 
 # Global variables
 plugin_initiated = False
 valve_loop_running = False
 valve_message_received = False
+all_data_request_received = False
 prior_valve_state = []
 settings_b4 = {}
 homebridge_loop_running = False
@@ -60,7 +60,7 @@ def save_prior_settings():
         settings_b4 = prior_settings
 
 
-def changed_valves_loop():
+def main_loop():
     """
     Monitors valve_messages queue for notices that the valve state has changed and takes appropriate action
     This loop runs on its own thread.  Valves changing at the same time sometimes are sent in separate messages.
@@ -75,43 +75,75 @@ def changed_valves_loop():
     while True:
 
         if valve_message_received:
+            # Request has been made to send valve information to Homebridge
+            valve_message_received = False
             # sleep here to ensure that if multiple valves are closed at the same time,
             # the main program has time to update all the valves in gv.sd
-            valve_message_received = False
             time.sleep(0.25)
-            valves = []
-            if len(prior_valve_state) != len(gv.srvals):
-                all_data_request_received = True 
-            i = 0
-            SIP_in_use = False
-            for valve in gv.srvals:
-                if all_data_request_received  or valve != prior_valve_state[i]:
-                    # Valve state has changed, send updated valve info to Homebridge
-                    if valve == 1: SIP_in_use = True
-                    valve_info = getValveInfo(i)
-                    valves.append(valve_info)      
-                i += 1
-            SIP_info = getSIPInfo()
-            SIP_info["InUse"] = SIP_in_use
-            
-            prior_valve_state = gv.srvals
-            SIP_info['valves'] = valves
-            print("SIP Info:", SIP_info)
-            print("sbits", gv.sbits)
-            
-            payload = json.dumps(SIP_info).encode('utf-8')
-            client = mqtt.get_client()
-            if client:
-                client.publish(
-                "SIP-Homebridge/valves", payload, qos=1, retain=True
-                )
-        
+            if all_data_request_received:
+                sip_info = getSIPInfo(0)
+            else:
+                sip_info = getSIPInfo(1)
+            print("SIP Info:", sip_info)
+            payload = json.dumps(sip_info).encode('utf-8')
+            publishMQTT("SIP-Homebridge/valves", payload, 1, True)
+            # if client:
+            #     client.publish(
+            #         "SIP-Homebridge/valves", payload, qos=1, retain=True
+            #     )
+            # valves = []
+            # if len(prior_valve_state) != len(gv.srvals):
+            #     all_data_request_received = True
+            # i = 0
+            # sip_in_use = False
+            # enabled_valves = gv.sd["show"]  # enabled valves stored as bits
+            # #
+            # enabled_valves = 7
+            # for valve in gv.srvals:
+            #     if (all_data_request_received or valve != prior_valve_state[i]) and enabled_valves & 1 << i != 0:
+            #         # Valve state has changed, send updated valve info to Homebridge
+            #         if valve == 1: sip_in_use = True
+            #         valve_info = getValveInfo(i)
+            #         valves.append(valve_info)
+            #     i += 1
+            # sip_info["InUse"] = sip_in_use
+            #
+            # prior_valve_state = gv.srvals
+            # sip_info['valves'] = valves
+
         time.sleep(0.25)
 
+
+def getSIPInfo(valve_option):
+    # Returns a dictionary with SIP information and a valve info collection
+    # valve_option = 0, return all valves
+    # valve_option = 1, return changed valves only
+    global prior_valve_state
+
+    # Get SIP Properties
+    global gv
+    sip_info = {"DisplayName": gv.sd["name"], "ProgramMode": "", "InUse": 1 in gv.srvals}
+
+    valves = []
+    enabled_valves = gv.sd["show"]  # enabled valves stored as bits
+    # todo remove next line and test for more than 8 valves
+    enabled_valves = 7
+    i = 0
+    for valve in gv.srvals:
+        if (valve_option == 0 or valve != prior_valve_state[i]) and enabled_valves & 1 << i != 0:
+            if valve == 1: sip_in_use = True
+            valve_info = getValveInfo(i)
+            valves.append(valve_info)
+        i += 1
+        prior_valve_state = gv.srvals
+
+    sip_info["valves"] = valves
+    return sip_info
+
+
 def getValveInfo(valve_index):
-    valve_info = {}
-    valve_info["Name"] = gv.snames[valve_index]
-    valve_info["InUse"] = ""
+    # Returns a dictionary with valve information
+    valve_info = {"Name": gv.snames[valve_index]}
     if gv.srvals[valve_index] == 1:
         valve_info["InUse"] = True
     else:
@@ -121,13 +153,19 @@ def getValveInfo(valve_index):
     else:
         valve_info['master'] = False
     return valve_info
-    
-def getSIPInfo():
-    global gv
-    SIP_info = {}
-    SIP_info["DisplayName"] = gv.sd["name"]
-    SIP_info["ProgramMode"] = ""
-    return SIP_info
+
+
+def publishMQTT(topic, payload, qos=1, retain=True):
+    client = mqtt.get_client()
+    if client:
+        client.publish(
+            "SIP-Homebridge/valves", payload=payload, qos=qos, retain=retain
+        )
+
+# def getSIPInfo():
+#     global gv
+#     sip_info = {"DisplayName": gv.sd["name"], "ProgramMode": ""}
+#     return sip_info
 
 
 class settings(ProtectedPage):
@@ -163,12 +201,6 @@ class save_settings(ProtectedPage):
         raise web.seeother(u"/")  # Return user to home page.
 
 
-def on_message(client, msg):
-    # "Callback when MQTT message is received."
-    if msg.topic == "SIP-Homebridge/valves":
-        print("valve message received", json.loads(msg.payload.decode('utf-8')))
-    else:
-        print("other mqtt message received:", msg.topic, "payload:", str(msg.payload.decode("utf-8")))
 
 class LoopThread(threading.Thread):
     def __init__(self, fn, thread_id, name, counter):
@@ -182,35 +214,24 @@ class LoopThread(threading.Thread):
         self.fn()
 
 
-def main_loop():
-    """
-    **********************************************
-    PROGRAM MAIN LOOP
-    runs on separate thread
-    **********************************************
-    """
-    global homebridge_loop_running
-    homebridge_loop_running = True
-    print(u"Homebridge plugin main loop initiated.")
-    start_time = datetime.datetime.now()
-
-    while True:
-        # Loop code goes here - listening for incoming mqtt commands
-        time.sleep(1)
-
-
 homebridge_loop = LoopThread(main_loop, 1, "HomebridgeLoop", 1)
-valve_loop = LoopThread(changed_valves_loop, 2, "ValveLoop", 2)
-
-
-#class ValveNotice:
-#    def __init__(self, switchtime):
-#        self.switch_time = switchtime
 
 
 """
 Event Triggers
 """
+
+
+def on_message(client, msg):
+    # "Callback when MQTT message is received."
+    if msg.topic == "SIP-Homebridge/valves":
+        print("valve message received", json.loads(msg.payload.decode('utf-8')))
+    if msg.topic == "Homebridge/SIP/common":
+        # This is a request from Homebridge for information
+        pass
+
+    else:
+        print("other mqtt message received:", msg.topic, "payload:", str(msg.payload.decode("utf-8")))
 
 
 def notify_zone_change(name, **kw):
@@ -225,7 +246,36 @@ zones = signal(u"zone_change")
 zones.connect(notify_zone_change)
 
 
-### valves ###
+### Option settings ###
+def notify_option_change(name, **kw):
+    print(u"Option settings changed in gv.sd", "name:", name, "kw:", kw)
+    #  gv.sd is a dictionary containing the setting that changed.
+    #  See "from options" in gv_reference.txt
+
+
+option_change = signal(u"option_change")
+option_change.connect(notify_option_change)
+
+
+### Station Names ###
+def notify_station_names(name, **kw):
+    print(u"Station names changed")
+    # Station names are in gv.snames and /data/snames.json
+
+
+station_names = signal(u"station_names")
+station_names.connect(notify_station_names)
+
+
+### System settings ###
+def notify_value_change(name, **kw):
+    print(u"Controller values changed in gv.sd")
+    #  gv.sd is a dictionary containing the setting that changed.
+    #  See "from controller values (cvalues)" gv_reference.txt
+
+
+value_change = signal(u"value_change")
+value_change.connect(notify_value_change)
 
 
 def notify_new_day(name, **kw):
@@ -236,22 +286,24 @@ def notify_new_day(name, **kw):
     """
     global valve_message_received
     global plugin_initiated
+    global all_data_request_received
 
     if not homebridge_loop_running:
         # This loop watches the flow
         homebridge_loop.start()
 
-    # send out current valve statuses
-    valve_message_received = True
-
-    if not valve_loop_running:
-        # This loop watches for changed valves
-        valve_loop.start()
+    # if not valve_loop_running:
+    #     # This loop watches for changed valves
+    #     valve_loop.start()
         
     if not plugin_initiated:
         # Code below here runs once all other plugins are initiated    
         subscribe()
-    
+
+        # set indicator to send out current valve statuses
+        all_data_request_received = True
+        valve_message_received = True
+
         # Send a test message
         client = mqtt.get_client()
         #if client:
@@ -270,7 +322,7 @@ Run when plugin is loaded
 
 
 def subscribe():
-    "Subscribe to messages"
+    # Subscribe to messages
     # topic = "$SYS/#"
     # if topic:
     #    mqtt.subscribe(topic, on_message, 2)
@@ -279,9 +331,3 @@ def subscribe():
     if topic:
         mqtt.subscribe(topic, on_message, 2)
         print('subscribed to SIP to Homebridge messages')
-   # topic = "Homebridge-SIP"
-   # if topic:
-   #     mqtt.subscribe(topic, on_message, 2)
-   #     print('subscribed to Homebridge to SIP messages')
-
-
