@@ -18,7 +18,6 @@ from urls import urls  # Get access to SIP's URLs
 import web  # web.py framework
 from webpages import ProtectedPage, WebPage  # Needed for security
 
-
 # Global variables
 plugin_initiated = False
 valve_loop_running = False
@@ -122,7 +121,7 @@ def getSIPInfo(valve_option):
 
     # Get SIP Properties
     global gv
-    sip_info = {"DisplayName": gv.sd["name"], "ProgramMode": "", "InUse": 1 in gv.srvals}
+    sip_info = {"Name": gv.sd["name"], "ProgramMode": 0, "Active": 1, "InUse": 1 in gv.srvals}
 
     valves = []
     enabled_valves = gv.sd["show"]  # enabled valves stored as bits
@@ -138,33 +137,38 @@ def getSIPInfo(valve_option):
         prior_valve_state = gv.srvals
 
     sip_info["valves"] = valves
+    # sip_info["valves"] = []
     return sip_info
 
 
 def getValveInfo(valve_index):
-    # Returns a dictionary with valve information
+    # Returns a dictionary with valve information based on valve index
     valve_info = {"Name": gv.snames[valve_index]}
     if gv.srvals[valve_index] == 1:
-        valve_info["InUse"] = True
+        valve_info["InUse"] = 1
     else:
-        valve_info["InUse"] = False
+        valve_info["InUse"] = 0
     if gv.sd["mas"] - 1 == valve_index:
-        valve_info['master'] = True
+        valve_info['Master'] = True
     else:
-        valve_info['master'] = False
+        valve_info['Master'] = False
+    valve_info['Active'] = 1
+    valve_info['ValveType'] = 1
     return valve_info
+
 
 
 def publishMQTT(topic, payload, qos=1, retain=True):
     client = mqtt.get_client()
     if client:
         client.publish(
-            "SIP-Homebridge/valves", payload=payload, qos=qos, retain=retain
+            topic="SIP-Homebridge/valves", payload=payload, qos=qos, retain=retain
         )
+
 
 # def getSIPInfo():
 #     global gv
-#     sip_info = {"DisplayName": gv.sd["name"], "ProgramMode": ""}
+#     sip_info = {"Name": gv.sd["name"], "ProgramMode": ""}
 #     return sip_info
 
 
@@ -176,7 +180,7 @@ class settings(ProtectedPage):
     def GET(self):
         try:
             with open(
-                u"./data/homebridge.json", u"r"
+                    u"./data/homebridge.json", u"r"
             ) as f:  # Read settings from json file if it exists
                 settings = json.load(f)
         except IOError:  # If file does not exist return empty value
@@ -201,7 +205,6 @@ class save_settings(ProtectedPage):
         raise web.seeother(u"/")  # Return user to home page.
 
 
-
 class LoopThread(threading.Thread):
     def __init__(self, fn, thread_id, name, counter):
         threading.Thread.__init__(self)
@@ -216,7 +219,6 @@ class LoopThread(threading.Thread):
 
 homebridge_loop = LoopThread(main_loop, 1, "HomebridgeLoop", 1)
 
-
 """
 Event Triggers
 """
@@ -224,14 +226,22 @@ Event Triggers
 
 def on_message(client, msg):
     # "Callback when MQTT message is received."
-    if msg.topic == "SIP-Homebridge/valves":
+    if msg.topic == "Homebridge-SIP/changed-valve":
+        #  Request received to change valve state
+        payload = json.loads(msg.payload.decode('utf-8'))
+        print("Valve state change requested:", payload)
+        # todo work here to take action on valve state change requests
+        valve_index = gv.snames.index(payload["Name"])
+        print("gv.snames: ", str(gv.snames), "valve index: ", str(valve_index))
+
+        # gv.srvals = [0, 0, 0, 0, 0, 0, 0, 0]
+    elif msg.topic == "SIP-Homebridge/valves":
         print("valve message received", json.loads(msg.payload.decode('utf-8')))
-    if msg.topic == "Homebridge/SIP/common":
+    elif msg.topic == "Homebridge/SIP/common":
         # This is a request from Homebridge for information
         pass
-
     else:
-        print("other mqtt message received:", msg.topic, "payload:", str(msg.payload.decode("utf-8")))
+        print("unrecognized mqtt message received:", msg.topic, "payload:", str(msg.payload.decode("utf-8")))
 
 
 def notify_zone_change(name, **kw):
@@ -239,7 +249,9 @@ def notify_zone_change(name, **kw):
     """
     This event tells us a valve was turned on or off
     """
-    valve_message_received = True
+    print("zone change notified")
+    if plugin_initiated:
+        valve_message_received = True
 
 
 zones = signal(u"zone_change")
@@ -287,15 +299,11 @@ def notify_new_day(name, **kw):
     global valve_message_received
     global plugin_initiated
     global all_data_request_received
-
+    print("NEW DAY")
     if not homebridge_loop_running:
         # This loop watches the flow
         homebridge_loop.start()
 
-    # if not valve_loop_running:
-    #     # This loop watches for changed valves
-    #     valve_loop.start()
-        
     if not plugin_initiated:
         # Code below here runs once all other plugins are initiated    
         subscribe()
@@ -303,13 +311,6 @@ def notify_new_day(name, **kw):
         # set indicator to send out current valve statuses
         all_data_request_received = True
         valve_message_received = True
-
-        # Send a test message
-        client = mqtt.get_client()
-        #if client:
-        #    client.publish(
-        #        "SIP-Homebridge", "Hello World", qos=1, retain=True
-        #    )
         plugin_initiated = True
 
 
@@ -330,4 +331,5 @@ def subscribe():
     topic = "SIP-Homebridge/#"
     if topic:
         mqtt.subscribe(topic, on_message, 2)
+        mqtt.subscribe("Homebridge-SIP/#", on_message, 2)
         print('subscribed to SIP to Homebridge messages')
