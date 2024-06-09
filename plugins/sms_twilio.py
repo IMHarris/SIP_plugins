@@ -220,7 +220,7 @@ class Test(ProtectedPage):
                         auth_token = ""
                         response = response + "please enter a valid auth token"
 
-                validate_str = "2" + Voice().validate_credentials(account_sid, auth_token, twilio_number)
+                validate_str = "2" + Voice().validate_credentials(account_sid, auth_token, twilio_number)["final_message"]
 
                 if validate_str:
                     response = validate_str
@@ -397,8 +397,13 @@ class Voice(object):
         else:
             return voice_sid
 
-    def is_flow_config_current(self,sid):
-        url = "https://studio.twilio.com/v2/Flows/%s" % sid
+    def is_flow_config_current(self,flow_sid, account_sid, auth_token):
+        login_str = b64encode("{}:{}".format(account_sid, auth_token).encode("utf-8")).decode("ascii")
+        headers = {
+            'Authorization': 'Basic %s' % login_str,
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        url = "https://studio.twilio.com/v2/Flows/%s" % flow_sid
         req = urllib.request.Request(url, headers=self.headers)
         # Send the request and read the response
         with urllib.request.urlopen(req) as response:
@@ -420,6 +425,7 @@ class Voice(object):
         response_dict["flow_attached"] = False
         response_dict["flow_attached_msg"] = ""
         response_dict["flow current"] = False
+        response_dict["final_message"] = ""
 
         login_str = b64encode("{}:{}".format(account_sid, auth_token).encode("utf-8")).decode("ascii")
         headers = {
@@ -443,11 +449,13 @@ class Voice(object):
         json_response = json.loads(data.decode('utf-8'))
         if not ("first_page_uri" in json_response.keys()):
             response_dict["auth_message"] = "There is a problem with your authentication credentials."
+            response_dict["final_message"] = ("There is a problem with your authentication credentials. "
+                                              "Please check your Twilio account ID and auth token.")
             return response_dict
 
         # If we've gotten this far, credentials are valid.  Need to check the phone number next
-        url = ("https://api.twilio.com/2010-04-01/Accounts/%s/IncomingPhoneNumbers.json?FriendlyName=%s"
-               % (account_sid, "+18479519366"))
+        url = ("https://api.twilio.com/2010-04-01/Accounts/%s/IncomingPhoneNumbers.json?PhoneNumber=%s"
+               % (account_sid, twilio_number))
         req = urllib.request.Request(url, headers=headers)
         try:
             with urllib.request.urlopen(req) as response:
@@ -457,47 +465,64 @@ class Voice(object):
             response_dict["twilio_number_msg"] = (
                     "Unable to find twilio phone number %s configured in your twilio account" % twilio_number,
                     response_str)
+            response_dict["final_message"] = ("Credentials validated but unable to find twilio phone number %s "
+                                              "configured in your twilio account" % twilio_number)
+            print("number fetch blew up")
             return response_dict
 
         json_response = json.loads(data.decode('utf-8'))
+        print("number response: ", data.decode('utf-8'))
         if not ("incoming_phone_numbers" in json_response.keys()) or len(json_response['incoming_phone_numbers']) == 0:
             response_dict["twilio_number_valid"] = False
             response_dict["twilio_number_msg"] = (
                     "Unable to find twilio phone number %s configured in your twilio account" % twilio_number)
+            response_dict["final_message"] = ("Credentials validated but unable to find twilio phone number %s "
+                                              "configured in your twilio account" % twilio_number)
             return response_dict
         else:
             response_dict["twilio_number_valid"] = True
 
         # Now check the flow attached to the number
-        if not ("voice_url" in json_response.keys()) or len(json_response['voice_url']) == 0:
-            response_dict["flow_attached_msg"] = "No flow is attached to the twilio phone number."
-        flow_sid = json_response["voice_url"].split("Flows/")
-        if len(flow_sid) >1:
-            response_dict["flow_attached"] = True
-        else
-            response_dict["flow_attached_msg"] = "There is no flow attached to the twilio phone number %s" % twilio_number
-
+        if (not ("voice_url" in json_response["incoming_phone_numbers"][0].keys()) or
+                len(json_response["incoming_phone_numbers"][0]['voice_url']) == 0 or
+                len(json_response["incoming_phone_numbers"][0]["voice_url"].split("Flows/")) == 0):
+            response_dict["flow_attached_msg"] = "No voice flow is attached to the twilio phone number."
+            response_dict["final_message"] = ("There is no voice flow attached to the twilio phone number, use the "
+                                              "create/ update button to create a new flow in your Twilio account and"
+                                              " attach it to your phone number.")
+            return response_dict
+        parsed_url = json_response["incoming_phone_numbers"][0]["voice_url"].split("Flows/")
+        flow_sid = parsed_url[1]
         response_dict["flow_attached"] = True
 
-        # Todo start here
+        # Check that the attached flow matches current flow
+        url = "https://studio.twilio.com/v2/Flows/%s" % flow_sid
+        # print("flow fetch url", url)
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req) as response:
+                data = response.read()
+        except Exception as e:
+            response_str = str(e)
+            response_dict["flow_attached_msg"] = "An unexpected error occurred fetching the twilio flow information."
+            response_dict["final_message"] = "An unexpected error occurred fetching the twilio flow information."
+            return response_dict
+
+        print("flow found:", data.decode('utf-8'))
+
+        # if self.is_flow_config_current(flow_sid, account_sid, auth_token):
+        #     response_dict["flow_current"] = True
+        # else:
+        #     response_dict["flow_current"] = False
+
 
         # Get information on the attached flow
 
         # We now need to validate that the phone number is attached to a flow
+        response_dict["final_message"] = "Credentials validated, phone number validated, flow is up to date."
+        return response_dict
 
-
-
-
-
-        print ("number found: ", data.decode('utf-8'))
-
-        # url = "https://api.twilio.com/2010-04-01/Accounts/%s/IncomingPhoneNumbers/%s.json" % (account_sid, twilio_number)
-
-        return "authentication succeeded.  twilio phone number is valid."
-
-
-
-    def update_flow(self):
+    def update_flow(self, flow_sid=""):
         # If flow already exists, we will update it.  If not, we will create it.
         # method_failed = False
         # flow_definition = (
@@ -558,7 +583,10 @@ class Voice(object):
         #         continue_loop = False
 
         error_msg = ""
-        voice_sid = self.get_flow_sid()
+        if flow_sid == "":
+            voice_sid = self.get_flow_sid()
+        else:
+            voice_sid = flow_sid
         if voice_sid.startswith("ERROR:"):
             response_str = voice_sid.split("ERROR:", 1)[1]
         elif voice_sid:
@@ -570,7 +598,7 @@ class Voice(object):
             #     data = response.read()
             #
             # twilio_data_json = json.loads(data.decode('utf-8'))
-            if self.is_flow_config_current(voice_sid):
+            if self.is_flow_config_current(voice_sid, self.account_sid, self.auth_token):
                 print('Uploaded  Twilio flow is current')
                 response_str = "Flow configured on Twilio is current. No action necessary"
             else:
