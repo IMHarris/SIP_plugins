@@ -1,4 +1,4 @@
-$def with(settings, runtime_values)
+$def with(settings, runtime_values, passed_vars)
 
 $var title: $_(u'SIP SMS Twilio Plugin')
 $var page: sms_twilio_plugin
@@ -92,15 +92,12 @@ $var page: sms_twilio_plugin
 
         <tr>
             <td>
-                <button type="button" id="btn-validate-credentials">Validate/Update Credentials</button>
+                <button type="button" id="btn-validate-credentials">Validate Credentials</button>
             </td>
-        </tr>
 
         $if runtime_values["voice-enabled"]:
-            <tr>
-                <td style='text-transform: none;'><div id="lbl-flow-id">Voice Flow ID:</div></td>
-                <td> <button type="button" id="btn-create-flow-id">Create/Update</button></td>
-            </tr>
+                <td> <button type="button" id="btn-create-flow-id">Create/Update Flow</button></td>
+        </tr>
         <tr>
             <td style='...'><div id="lbl-status2">Status:</div></td>
             <td colspan="2">
@@ -117,23 +114,27 @@ $var page: sms_twilio_plugin
     <button id="cSubmit" class="submit"><b>$_(u'Submit')</b></button>
     <button id="cCancel" class="cancel danger">$_(u'Cancel')</button>
 </div>
-</div>
+ </div>
 
 <script>
     var request = new XMLHttpRequest();
     var href = window.location.href;
     var apiURL = href.substr(0, href.lastIndexOf("/") + 1) + "sms-twilio-test";
 
+    //console.log(myJavascriptVar);
+
+    //var myJSONVar = JSON.parse(myJavascriptVar)
+    //console.log(myJSONVar.sms-enabled);
+
     request.onreadystatechange = function() {
         //function called when XHR data is loaded
         if (this.readyState == 4 && this.status == 200) {
-            let responseText = this.responseText;
-            if (responseText.charAt(0) === '2') {
-                // Remove the first character
-                let modifiedResponseText = responseText.slice(1);
-                document.getElementById("text-status2").textContent = modifiedResponseText;
+            //let responseText = this.responseText;
+            let responseJSON = JSON.parse(this.responseText);
+            if (responseJSON.textbox === '2') {
+                document.getElementById("text-status2").textContent = responseJSON.msg;
             } else {
-                document.getElementById("text-status").textContent = responseText;
+                document.getElementById("text-status").textContent = responseJSON.msg;
             }
         }
     }
@@ -217,8 +218,7 @@ $var page: sms_twilio_plugin
                 document.getElementById("text-voice-phone").style.color = "rgba(" + rgbaTxtVariance + ")";
                 document.getElementById("lbl-voice").style.color = "rgba(" + rgbaLblVariance + ")";
                 document.getElementById("btn-test-voice").disabled = false;
-                document.getElementById("lbl-flow-id").disabled = false;
-                document.getElementById("lbl-flow-id").style.color = "rgba(" + rgbaLblVariance + ")";
+                //document.getElementById("lbl-flow-id").style.color = "rgba(" + rgbaLblVariance + ")";
                 document.getElementById("btn-create-flow-id").disabled = false;
                 document.getElementById("lbl-status").style.color = "rgba(" + rgbaLblVariance + ")";
                 document.getElementById("text-status").disabled = false;
@@ -229,8 +229,8 @@ $var page: sms_twilio_plugin
                 console.log("about to disable the voice test button");
                 document.getElementById("btn-test-voice").disabled = true;
                 console.log("after disable command");
-                document.getElementById("lbl-flow-id").disabled = true;
-                document.getElementById("lbl-flow-id").style.color = "rgba(0,0,0,0.2)";
+                //document.getElementById("lbl-flow-id").disabled = true;
+                //document.getElementById("lbl-flow-id").style.color = "rgba(0,0,0,0.2)";
                 document.getElementById("btn-create-flow-id").disabled = true;
                 if (document.getElementById("check-sms")) {
                     if (document.getElementById("check-sms").checked) {
