@@ -29,6 +29,7 @@ from base64 import b64encode
 import urllib.request, urllib.parse
 import datetime
 import json
+
 # *****
 
 SMS_ENABLED = True  # Toggles SMS option display to user
@@ -129,6 +130,7 @@ class settings(ProtectedPage):
     """
     Load an html page for entering plugin settings.
     """
+
     def __init__(self):
         web.header('Access-Control-Allow-Origin', '*')
 
@@ -156,11 +158,11 @@ class settings(ProtectedPage):
             'sms-enabled': SMS_ENABLED,
             'voice-enabled': VOICE_ENABLED,
         }
-        passed_vars = json.dumps(runtime_values).encode("utf-8")
-        print("passed_vars", passed_vars)
-
-        return template_render.sms_twilio(settings, runtime_values, passed_vars)  # open settings page
-
+        # passed_vars = json.dumps(runtime_values).encode("utf-8")
+        # print("passed_vars", passed_vars)
+        print(runtime_values)
+        # return template_render.sms_twilio(settings, runtime_values, passed_vars)  # open settings page
+        return template_render.sms_twilio(settings, runtime_values)  # open settings page
 
 
 class save_settings(ProtectedPage):
@@ -185,7 +187,7 @@ class save_settings(ProtectedPage):
                                                   "PLACEHOLDER") and "text-auth-token" in saved_settings.keys():
             qdict["text-auth-token"] = saved_settings["text-auth-token"]
         if "text-flow-id" in saved_settings.keys():
-           qdict["text-flow-id"] = saved_settings["text-flow-id"]
+            qdict["text-flow-id"] = saved_settings["text-flow-id"]
         with open(SETTINGS_FILENAME, u"w") as f:
             json.dump(qdict, f)  # save to file
         raise web.seeother(u"sms-twilio-sp")  # Return user to home page.
@@ -207,17 +209,20 @@ class Test(ProtectedPage):
                              msg="This is a {} SMS test message from {}.".format(BROADCAST_NAME, gv.sd["name"]),
                              dest=qdict["dest"])
                 )
+                response["type"] = "SMS"
             elif qdict["type"] == "Voice":
                 response["msg"] = (
                     send_voice(BROADCAST_NAME,
                                msg="This is a {} voice test message from {}.".format(BROADCAST_NAME, gv.sd["name"]),
                                dest=qdict["dest"])
                 )
+                response["type"] = "Voice"
             elif qdict["type"] == "CreateFlowID":
                 response["msg"] = (
                         '2' +
                         Voice().update_flow()
                 )
+                response["type"] = "CreateFlowID"
             elif qdict["type"] == "ValidateCredentials":
                 msg = ""
                 # Load response coming in from web page
@@ -232,18 +237,31 @@ class Test(ProtectedPage):
                     if "text-auth-token" in settings:
                         auth_token = settings["text-auth-token"]
 
-                validate_str = Voice().validate_credentials(account_sid, auth_token, twilio_number)["final_message"]
+                validate_response = Voice().validate_credentials(account_sid, auth_token, twilio_number)
+                if qdict["voice"]:
+                    validate_str = validate_response["final_msg_voice"]
+                elif qdict["sms"]:
+                    validate_str = validate_response["final_msg_sms"]
+                else:
+                    validate_str = ""
+
+                response["type"] = "ValidateCredentials"
 
                 if validate_str:
                     response["msg"] = validate_str
+                    response["auth_valid"] = validate_response["auth_valid"]
+                    response["twilio_number_valid"] = validate_response["twilio_number_valid"]
 
             else:
                 response["msg"] = ""
         else:
             response["msg"] = "There is an unidentified problem validating credentials"
+            response["auth_valid"] = False
+            response["twilio_number_valid"] = False
 
         web.header(u"Content-Type", u"text/csv")
         return json.dumps(response).encode()
+
 
 # *********************************************************
 #
@@ -409,7 +427,7 @@ class Voice(object):
         else:
             return voice_sid
 
-    def is_flow_config_current(self,flow_sid, account_sid, auth_token):
+    def is_flow_config_current(self, flow_sid, account_sid, auth_token):
         login_str = b64encode("{}:{}".format(account_sid, auth_token).encode("utf-8")).decode("ascii")
         headers = {
             'Authorization': 'Basic %s' % login_str,
@@ -437,7 +455,8 @@ class Voice(object):
         response_dict["flow_attached"] = False
         response_dict["flow_attached_msg"] = ""
         response_dict["flow_current"] = False
-        response_dict["final_message"] = ""
+        response_dict["final_msg_voice"] = ""
+        response_dict["final_msg_sms"] = ""
 
         login_str = b64encode("{}:{}".format(account_sid, auth_token).encode("utf-8")).decode("ascii")
         headers = {
@@ -456,15 +475,17 @@ class Voice(object):
         except Exception as e:
             response_str = str(e)
             response_dict["auth_message"] = response_str
-            response_dict["final_message"] = ("Unable to log in to your Twilio account.  "
-                                              "Please check your Twilio account ID and auth token. / %s") % response_str
+            response_dict["final_msg_voice"] = ("Unable to log in to your Twilio account.  "
+                                                "Please check your Twilio account ID and auth token. / %s") % response_str
+            response_dict["final_msg_sms"] = response_dict["final_msg_voice"]
             return response_dict
 
         json_response = json.loads(data.decode('utf-8'))
         if not ("first_page_uri" in json_response.keys()):
             response_dict["auth_message"] = "There is a problem with your authentication credentials."
-            response_dict["final_message"] = ("There is a problem with your authentication credentials. "
-                                              "Please check your Twilio account ID and auth token.")
+            response_dict["final_msg_voice"] = ("There is a problem with your authentication credentials. "
+                                                "Please check your Twilio account ID and auth token.")
+            response_dict["final_msg_sms"] = response_dict["final_msg_voice"]
             return response_dict
 
         # If we've gotten this far, credentials are valid.  Need to check the phone number next
@@ -477,10 +498,11 @@ class Voice(object):
         except Exception as e:
             response_str = str(e)
             response_dict["twilio_number_msg"] = (
-                    "Unable to find twilio phone number %s configured in your twilio account" % twilio_number,
-                    response_str)
-            response_dict["final_message"] = ("Credentials validated but unable to find twilio phone number %s "
-                                              "configured in your twilio account" % twilio_number)
+                "Unable to find twilio phone number %s configured in your twilio account" % twilio_number,
+                response_str)
+            response_dict["final_msg_voice"] = ("Credentials validated but unable to find twilio phone number %s "
+                                                "configured in your twilio account" % twilio_number)
+            response_dict["final_msg_sms"] = response_dict["final_msg_voice"]
             print("number fetch blew up")
             return response_dict
 
@@ -490,10 +512,13 @@ class Voice(object):
             response_dict["twilio_number_valid"] = False
             response_dict["twilio_number_msg"] = (
                     "Unable to find twilio phone number %s configured in your twilio account" % twilio_number)
-            response_dict["final_message"] = ("Credentials validated but unable to find twilio phone number %s "
-                                              "configured in your twilio account" % twilio_number)
+            response_dict["final_msg_voice"] = ("Credentials validated but unable to find twilio phone number %s "
+                                                "configured in your twilio account" % twilio_number)
+            response_dict["final_msg_sms"] = response_dict["final_msg_voice"]
             return response_dict
         else:
+            response_dict["final_msg_voice"] = "Twilio credentials and phone number validated successfully."
+            response_dict["final_msg_sms"] = response_dict["final_msg_voice"]
             response_dict["twilio_number_valid"] = True
 
         # Now check the flow attached to the number
@@ -501,9 +526,9 @@ class Voice(object):
                 len(json_response["incoming_phone_numbers"][0]['voice_url']) == 0 or
                 len(json_response["incoming_phone_numbers"][0]["voice_url"].split("Flows/")) == 0):
             response_dict["flow_attached_msg"] = "No voice flow is attached to the twilio phone number."
-            response_dict["final_message"] = ("There is no voice flow attached to the twilio phone number, use the "
-                                              "create/ update button to create a new flow in your Twilio account and"
-                                              " attach it to your phone number.")
+            response_dict["final_msg_voice"] = ("There is no voice flow attached to the twilio phone number, use the "
+                                                "create/ update button to create a new flow in your Twilio account and"
+                                                " attach it to your phone number.")
             return response_dict
         parsed_url = json_response["incoming_phone_numbers"][0]["voice_url"].split("Flows/")
         flow_sid = parsed_url[1]
@@ -519,7 +544,7 @@ class Voice(object):
         except Exception as e:
             response_str = str(e)
             response_dict["flow_attached_msg"] = "An unexpected error occurred fetching the Twilio flow information."
-            response_dict["final_message"] = "An unexpected error occurred fetching the Twilio flow information."
+            response_dict["final_msg_voice"] = "An unexpected error occurred fetching the Twilio flow information."
             return response_dict
 
         print("flow found:", data.decode('utf-8'))
@@ -527,27 +552,32 @@ class Voice(object):
         flow_name = json_response.get('friendly_name')
         if flow_name != TWILIO_FLOW_NAME:
             response_dict["flow_attached_msg"] = "Attached flow name does not match Twilio flow"
-            response_dict["final_message"] = ("The flow attached to your Twilio phone number was not created by the "
-                                              "SIP Twilio plug-in and may not work properly with this app.  "
-                                              "Use the create/update button to create a new flow and attach it to your "
-                                              "Twilio phone number")
+            response_dict["final_msg_voice"] = ("Credentials and phone validated, however the flow attached to your "
+                                                "Twilio phone number was not created by the "
+                                                "SIP Twilio plug-in and may not work properly with this app. "
+                                                "Use the create/update button to create a new flow and attach it to "
+                                                "your Twilio phone number. This operation will not delete the current "
+                                                "flow. It will create a new flow and attach it to your Twilio phone "
+                                                "number. If another application is using this phone number as well, "
+                                                "the SIP flow may not work properly for that application once "
+                                                "attached to your Twilio phone number.")
             return response_dict
 
         response_dict["flow_attached_msg"] = "Flow was created by SIP plug-in"
-        response_dict["final_message"] = "Flow was created by SIP plug-in"
+        response_dict["final_msg_voice"] = "Flow was created by SIP plug-in"
 
         # Flow is found and was created by SIP.  Check to see if it is current
         if json_response["definition"] != self.flow_definition_json:
             response_dict["flow_attached_msg"] = "Flow was created by SIP plug-in and does not match current flow"
-            response_dict["final_message"] = ("Your flow was created by the SIP plug-in, but isn't current.  Use the "
-                                              "create/update button to update the %s flow configuration on your Twilio "
-                                              "account") % TWILIO_FLOW_NAME
+            response_dict["final_msg_voice"] = ("Your flow was created by the SIP plug-in, but isn't current.  Use the "
+                                                "create/update button to update the %s flow configuration on your Twilio "
+                                                "account") % TWILIO_FLOW_NAME
             response_dict["flow_current"] = False
             return response_dict
         else:
             response_dict["flow_current"] = True
 
-        response_dict["final_message"] = "Credentials validated, phone number validated, flow is up to date."
+        response_dict["final_msg_voice"] = "Credentials validated, phone number validated, flow is up to date."
         return response_dict
 
     def update_flow(self, flow_sid=""):
@@ -572,8 +602,6 @@ class Voice(object):
         #     '"flags": {"allow_concurrent_calls": true}, "description": "A New Flow"}')
         # flow_definition_json = json.loads(flow_definition)
         #
-
-
 
         # url = "https://studio.twilio.com/v2/Flows"
         # voice_sid = ""
@@ -660,7 +688,7 @@ class Voice(object):
                 'Status': 'published',
                 'Definition': self.flow_definition,
                 'CommitMessage': 'Set up by SIP Twilio_SMS plugin on %s' % datetime.datetime.now().strftime(
-                        "%m/%d/%Y, %I:%M:%S %p")
+                    "%m/%d/%Y, %I:%M:%S %p")
             }
 
             # Data must be bytes (we're url encoding it)
