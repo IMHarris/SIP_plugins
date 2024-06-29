@@ -189,6 +189,9 @@ $if runtime_values["sms-enabled"]:
         pkg = JSON.parse('{}');
         pkg['type'] = 'SMS';
         pkg['dest'] = document.getElementById("text-sms-phone").value;
+        pkg['acct'] = document.getElementById("text-account-id").value;
+        pkg['auth'] = document.getElementById("text-auth-token").value;
+        pkg['twilio-num'] = document.getElementById("text-twilio-number").value;
         request.send(JSON.stringify((pkg)));
     }
     $if runtime_values["voice-enabled"]:
@@ -244,6 +247,9 @@ $if runtime_values["sms-enabled"]:
             pkg = JSON.parse('{}');
             pkg['type'] = 'Voice';
             pkg['dest'] = document.getElementById("text-voice-phone").value;
+            pkg['acct'] = document.getElementById("text-account-id").value;
+            pkg['auth'] = document.getElementById("text-auth-token").value;
+            pkg['twilio-num'] = document.getElementById("text-twilio-number").value;
             request.send(JSON.stringify((pkg)));
         }
         function fnCreateFlowID() {
