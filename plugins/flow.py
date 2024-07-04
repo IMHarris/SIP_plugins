@@ -24,7 +24,7 @@ from webpages import showInFooter  # Enable plugin to display station data on ti
 # from webpages import showOnTimeline  # Enable plugin to display station data on timeline
 
 # Global variables
-SENSOR_REGISTER = 0x00  # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
+SENSOR_REGISTER = 0x01  # 0x00 to receive sensor readings, 0x01 to have the sensor send random numbers to use for testing
 # Number of readings to average for the flow rate reading display passed to flow smoother.
 # This is for display purposes only and does not change the usage
 # calculation in any way
@@ -67,7 +67,7 @@ urls.extend([
     ])
 
 # Add this plugin to the PLUGINS menu ["Menu Name", "URL"], (Optional)
-gv.plugin_menu.append([_(u"Flow Plugin"), u"/flow-sp"])
+gv.plugin_menu.append([_(u"Flow"), u"/flow-sp"])
 
 
 def save_prior_settings():
@@ -193,8 +193,8 @@ class settings(ProtectedPage):
     """
     Load an html page for entering plugin settings.
     """ 
-    global master_sensor_addr
-    settings_b4 = {}
+    # global master_sensor_addr
+    # settings_b4 = {}
     def GET(self):
         
         try:
