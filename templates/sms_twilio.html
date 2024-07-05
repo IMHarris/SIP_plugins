@@ -48,7 +48,7 @@ $var page: sms_twilio_plugin
 
         </table></br>
 
-        <p>Phone Numbers</p>
+        <p>Outgoing Phone Numbers</p>
         <table class="optionList">
 
             $if runtime_values["sms-enabled"]:
@@ -72,7 +72,7 @@ $var page: sms_twilio_plugin
         </table>
         <p style='font-size: 0.9em;'>format +15555555555,+15555555555</p></br></br>
 
-<p>Account Setup</p>
+    <p>Account Setup</p>
     <table class="optionList">
 
         <tr>
@@ -105,9 +105,10 @@ $var page: sms_twilio_plugin
             </td>
         </tr>
 
+    </table><br>
 
-    </table>
-
+    Pause messaging <input type="checkbox" name="pause-messaging" id="pause-messaging"  ${"checked" if 'pause-messaging' in settings else ""}>
+    <br><br>
     </form>
 
 <div class="controls">

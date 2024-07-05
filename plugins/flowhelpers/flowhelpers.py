@@ -169,6 +169,7 @@ class FlowWindow:
         self._flow_next_start_time = datetime.datetime.now() + datetime.timedelta(weeks=520)
         self._flow_rate_read_time = datetime.datetime.now()
         self.recorded_time = datetime.datetime.now()
+        self.seen_flow_once = False
 
     def load_valve_states(self):
         i = 0
@@ -261,8 +262,19 @@ class FlowWindow:
         current_time = datetime.datetime.now()
         delta = current_time - self.start_time
         duration = delta.total_seconds()
+        seen_flow_twice = False
 
-        if not self._flow_warning2_given and duration > 3 and not self.valve_open() and rate > 3:
+        if rate > 3:
+            if self.seen_flow_once:
+                seen_flow_twice = True
+            else:
+                self.seen_flow_once = True
+        else:
+            self.seen_flow_once = False
+
+        # Need to see flow in 2 consecutive calls to throw the warning.
+        # This is to filter out noise on the sensor line.
+        if not self._flow_warning2_given and duration > 3 and not self.valve_open() and seen_flow_twice:
             # Water is flowing but the valves show as off. Send error message.
             print("Flow error 2 encountered")
             self._execute_notification_2(rate)
@@ -514,7 +526,7 @@ class FlowWindow:
 
     def duration(self):
         delta = self.end_time - self._start_time
-        return int(delta.total_seconds())
+        return int(round(delta.total_seconds()))
 
     def write_log(self):
         """
